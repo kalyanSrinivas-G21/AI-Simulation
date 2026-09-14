@@ -1,0 +1,19 @@
+{
+  "name": "fish_level3_small",
+  "world": "fish",
+  "level": 3,
+  "architecture": "input(9) -> 32 -> 16 -> output(2)",
+  "algorithm": "PPO",
+  "total_timesteps": 500000,
+  "trained_date": "2026-09-11",
+  "eval_mean_reward": 142.3,
+  "eval_std_reward": 18.7,
+  "eval_episodes": 60,
+  "eval_seeds": [
+    1,
+    2,
+    3
+  ],
+  "params": 882,
+  "inference_time_ms": 0.04
+}

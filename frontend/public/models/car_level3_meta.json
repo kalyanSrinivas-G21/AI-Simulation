@@ -1,0 +1,19 @@
+{
+  "name": "car_level3_continuous_ppo",
+  "world": "car",
+  "level": 3,
+  "architecture": "input(7) -> 32 -> 16 -> output(2)",
+  "algorithm": "PPO",
+  "total_timesteps": 500000,
+  "trained_date": "2026-09-11",
+  "eval_mean_reward": 184.6,
+  "eval_std_reward": 14.2,
+  "eval_episodes": 60,
+  "eval_seeds": [
+    1,
+    2,
+    3
+  ],
+  "params": 818,
+  "inference_time_ms": 0.03
+}

@@ -1,0 +1,57 @@
+[
+  {
+    "step": 0,
+    "reward": -48.0,
+    "cleanRate": 8.0
+  },
+  {
+    "step": 50000,
+    "reward": -18.2,
+    "cleanRate": 18.0
+  },
+  {
+    "step": 100000,
+    "reward": 35.4,
+    "cleanRate": 42.0
+  },
+  {
+    "step": 150000,
+    "reward": 88.0,
+    "cleanRate": 68.0
+  },
+  {
+    "step": 200000,
+    "reward": 132.5,
+    "cleanRate": 81.0
+  },
+  {
+    "step": 250000,
+    "reward": 155.0,
+    "cleanRate": 87.0
+  },
+  {
+    "step": 300000,
+    "reward": 168.2,
+    "cleanRate": 91.5
+  },
+  {
+    "step": 350000,
+    "reward": 175.4,
+    "cleanRate": 93.0
+  },
+  {
+    "step": 400000,
+    "reward": 180.1,
+    "cleanRate": 94.5
+  },
+  {
+    "step": 450000,
+    "reward": 183.5,
+    "cleanRate": 95.0
+  },
+  {
+    "step": 500000,
+    "reward": 184.6,
+    "cleanRate": 95.5
+  }
+]

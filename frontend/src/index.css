@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-canvas: #0B0F14;
+  --bg-panel: #12181F;
+  --bg-panel-raised: #182029;
+  --border-subtle: #232B36;
+  --border-focus: #3E8EED;
+
+  --text-primary: #E6EDF3;
+  --text-secondary: #8B95A1;
+  --text-disabled: #4A5461;
+
+  --accent-primary: #3E8EED;
+  --accent-success: #22C55E;
+  --accent-danger: #EF4444;
+  --accent-warning: #F5A623;
+
+  --level-0-random: #6B7280;
+  --level-1-rules: #F5A623;
+  --level-2-reactive: #8B5CF6;
+  --level-3-learning: #3E8EED;
+  --level-4-advanced: #10B981;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 5% opacity grid-paper texture per §4.1 */
+.bg-grid-lab {
+  background-color: #0B0F14;
+  background-image: 
+    linear-gradient(to right, rgba(35, 43, 54, 0.45) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(35, 43, 54, 0.45) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Custom scrollbars for clean lab theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0F14;
+}
+::-webkit-scrollbar-thumb {
+  background: #232B36;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3E8EED;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

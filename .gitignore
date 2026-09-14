@@ -1,0 +1,28 @@
+# Node / Frontend
+node_modules/
+dist/
+build/
+.env
+.env.local
+.DS_Store
+
+# Python / Training
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+.env
+
+# Models & Checkpoints
+*.zip
+*.pt
+*.pth
+logs/
+tensorboard/
+
+# IDEs
+.vscode/
+.idea/
+*.swp

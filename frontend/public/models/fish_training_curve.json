@@ -1,0 +1,57 @@
+[
+  {
+    "step": 0,
+    "reward": -35.2,
+    "survivalRate": 12.0
+  },
+  {
+    "step": 50000,
+    "reward": -12.4,
+    "survivalRate": 22.5
+  },
+  {
+    "step": 100000,
+    "reward": 28.5,
+    "survivalRate": 45.0
+  },
+  {
+    "step": 150000,
+    "reward": 65.2,
+    "survivalRate": 62.0
+  },
+  {
+    "step": 200000,
+    "reward": 98.4,
+    "survivalRate": 74.5
+  },
+  {
+    "step": 250000,
+    "reward": 115.1,
+    "survivalRate": 81.0
+  },
+  {
+    "step": 300000,
+    "reward": 126.8,
+    "survivalRate": 85.5
+  },
+  {
+    "step": 350000,
+    "reward": 134.2,
+    "survivalRate": 88.0
+  },
+  {
+    "step": 400000,
+    "reward": 139.5,
+    "survivalRate": 89.5
+  },
+  {
+    "step": 450000,
+    "reward": 141.8,
+    "survivalRate": 91.0
+  },
+  {
+    "step": 500000,
+    "reward": 142.3,
+    "survivalRate": 92.0
+  }
+]
