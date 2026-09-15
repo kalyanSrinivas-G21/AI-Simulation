@@ -1,4 +1,4 @@
-# ModelTrain
+# AI Simulation Algo's
 
 A split-architecture web application featuring multi-agent AI simulations. The project demonstrates the evolution of artificial intelligence behaviors, from basic rules and swarms to advanced reinforcement learning policies.
 
