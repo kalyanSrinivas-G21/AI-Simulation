@@ -162,7 +162,8 @@ export class CarSim {
       this.car.registerCrash(this.elapsedMs);
     }
 
-    this.traffic.update(dt * this.speedMultiplier);
+    const mainCarLoc = this.track.getClosestCenterline(this.car.x, this.car.z);
+    this.traffic.update(dt * this.speedMultiplier, mainCarLoc);
 
     const obstacles = this.traffic.getObstacles();
     this.currentSensors = RaycastSensors.computeReadings(

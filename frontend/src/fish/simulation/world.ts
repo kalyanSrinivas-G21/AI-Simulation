@@ -6,7 +6,7 @@ import { IntelligenceLevel } from "../../design-system/tokens";
 import { RandomFishController } from "../controllers/RandomFishController";
 import { RuleFishController } from "../controllers/RuleFishController";
 import { SwarmFishController } from "../controllers/SwarmFishController";
-import { NeuralFishController } from "../controllers/NeuralFishController";
+import { PerfectFishController } from "../controllers/PerfectFishController";
 
 export interface FishMetrics {
   totalFish: number;
@@ -38,7 +38,7 @@ export class FishWorld {
   randomCtrl: RandomFishController;
   ruleCtrl:   RuleFishController;
   swarmCtrl:  SwarmFishController;
-  neuralCtrl: NeuralFishController;
+  perfectCtrl: PerfectFishController;
 
   ticks:              number = 0;
   totalAttacks:       number = 0;
@@ -56,7 +56,7 @@ export class FishWorld {
     this.randomCtrl = new RandomFishController();
     this.ruleCtrl   = new RuleFishController();
     this.swarmCtrl  = new SwarmFishController();
-    this.neuralCtrl = new NeuralFishController();
+    this.perfectCtrl = new PerfectFishController();
 
     this.shark = new Shark(50, 50, 0);
     this.reset(seed, fishCount);
@@ -94,7 +94,7 @@ export class FishWorld {
     this.randomCtrl.reset(seed);
     this.ruleCtrl.reset(seed);
     this.swarmCtrl.reset();
-    this.neuralCtrl.reset();
+    this.perfectCtrl.reset();
 
     this.shark = new Shark(
       sharkPRNG.range(40, 100),
@@ -152,9 +152,9 @@ export class FishWorld {
         case 2:
           this.swarmCtrl.applyToFish(fish, this.shark, this.grid, this.width, this.height, dt);
           break;
+        case 3:
         default:
-          // Level 3 & 4 — neural
-          this.neuralCtrl.applyToFish(fish, this.shark, this.grid, this.width, this.height, dt);
+          this.perfectCtrl.applyToFish(fish, this.shark, this.grid, this.width, this.height, dt);
           break;
       }
 

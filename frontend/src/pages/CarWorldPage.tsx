@@ -15,17 +15,21 @@ import { LEVEL_COLORS, IntelligenceLevel } from "../design-system/tokens";
 import { RotateCcw, FastForward, Brain } from "lucide-react";
 
 export const CarWorldPage: React.FC = () => {
-  const { carLevel, setCarLevel, globalSeed } = useAppStore();
+  const { carLevel, setCarLevel, globalSeed, setGlobalSeed } = useAppStore();
   const [cameraMode, setCameraMode] = useState<"topDown" | "follow">("topDown");
   const [speedMultiplier, setSpeedMultiplier] = useState<number>(1.0);
 
-  // Local seed state to force re-creation of the simulation
-  const [localSeed, setLocalSeed] = useState(globalSeed);
-  const sim = useMemo(() => new CarSim(localSeed), [localSeed]);
+  const sim = useMemo(() => new CarSim(globalSeed), []);
   const [metrics, setMetrics] = useState<CarMetrics>(() => sim.getMetrics());
 
   useEffect(() => { sim.setLevel(carLevel); }, [sim, carLevel]);
   useEffect(() => { sim.setSpeedMultiplier(speedMultiplier); }, [sim, speedMultiplier]);
+  
+  useEffect(() => {
+    sim.reset(globalSeed);
+    setMetrics(sim.getMetrics());
+  }, [globalSeed, sim]);
+  
   useEffect(() => {
     const interval = setInterval(() => setMetrics(sim.getMetrics()), 100);
     return () => clearInterval(interval);
@@ -33,11 +37,11 @@ export const CarWorldPage: React.FC = () => {
 
   // Generate a brand new random environment on Reset
   const handleResetSeed = () => {
-    setLocalSeed(Math.floor(Math.random() * 100000));
+    setGlobalSeed(Math.floor(Math.random() * 9000 + 1000));
   };
 
   const handleResetCar = () => {
-    sim.reset(localSeed);
+    sim.reset(globalSeed);
     setMetrics(sim.getMetrics());
   };
   
@@ -47,8 +51,8 @@ export const CarWorldPage: React.FC = () => {
   const LEVEL_NAMES = ["RANDOM", "RULE-BASED", "LEARNING", "NEURAL NETWORK"];
   const activeRuleIndex = sim.car.activeRuleIndex;
   
-  const neuralObs = carLevel === 3 ? sim.perfectCtrl.lastObservation : sim.neuralCtrl.lastObservation;
-  const neuralAction = carLevel === 3 ? sim.perfectCtrl.lastAction : sim.neuralCtrl.lastAction;
+  const neuralObs = sim.neuralCtrl.lastObservation;
+  const neuralAction = sim.neuralCtrl.lastAction;
   
   const sensorNames = ["Front (40m)", "Front-L (+30°)", "Front-R (-30°)", "Left (+90°)", "Right (-90°)"];
 
@@ -140,7 +144,7 @@ export const CarWorldPage: React.FC = () => {
               {carLevel === 0 && "Level 0 drives erratically, freezing and reversing. Crashes immediately."}
               {carLevel === 1 && "Level 1 strictly follows rules. It panics and freezes when surrounded by traffic."}
               {carLevel === 2 && "Level 2 learns from crashes. Hit 'Reset Learning' to watch it evolve from scratch."}
-              {carLevel === 3 && "Level 3 uses smooth predictive control. It brakes smoothly and navigates traffic perfectly."}
+              {carLevel === 3 && "Level 3 uses a fully trained Neural Network combined with DashCam perception. It navigates traffic perfectly."}
             </div>
           </div>
         </div>

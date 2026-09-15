@@ -48,7 +48,7 @@ export const AILabPage: React.FC = () => {
   const activeMeta = selectedWorld === "fish" ? fishMeta : carMeta;
   const activeCurve = selectedWorld === "fish" ? fishCurve : carCurve;
 
-  // Level 4 Architecture Experiment data per §8.6 and §10.4
+  // Level 3 Architecture Experiment data
   const archExperimentData = [
     { name: "Small (16)", params: 300, survivalRate: 84.5, latencyMs: 0.02 },
     { name: "Medium (32->16)", params: 882, survivalRate: 92.0, latencyMs: 0.04 },
@@ -351,7 +351,7 @@ export const AILabPage: React.FC = () => {
             <div>
               <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-textPrimary flex items-center justify-between">
                 <span>ARCHITECTURE COMPARISON EXPERIMENT (§8.6)</span>
-                <span className="text-xs text-level-4">Small vs Med vs Adv</span>
+                <span className="text-xs text-level-3">Small vs Med vs Adv</span>
               </h3>
               <p className="text-xs font-mono text-textSecondary mt-1">
                 Controlled test: env, reward, timesteps (500k), and algorithm held constant. Only

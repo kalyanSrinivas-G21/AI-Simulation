@@ -40,8 +40,6 @@ export const LevelPill: React.FC<LevelPillProps> = ({
         return <Users {...iconProps} />;
       case 3:
         return <Brain {...iconProps} />;
-      case 4:
-        return <Eye {...iconProps} />;
     }
   };
 

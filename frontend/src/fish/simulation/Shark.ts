@@ -7,27 +7,25 @@ export class Shark {
   x: number;
   y: number;
   heading: number;
-  speed: number;         // px/s
+  speed: number;        
   desiredHeading: number;
   state: SharkState = "SEARCH";
   currentTarget: Fish | null = null;
-  cooldownTimer: number = 0;  // seconds
-  attackTimer:   number = 0;  // seconds
+  cooldownTimer: number = 0;  
+  attackTimer:   number = 0;  
 
-  // Speed constants (px/s)
-  static readonly SEARCH_SPEED  =  90;
-  static readonly CHASE_SPEED   = 120;
-  static readonly ATTACK_SPEED  = 160;
+  static readonly SEARCH_SPEED  =  80; 
+  static readonly CHASE_SPEED   = 120; 
+  static readonly ATTACK_SPEED  = 160; 
   static readonly COOLDOWN_SPEED =  60;
 
-  // Turn rates (rad/s) — capped steering, never snap
-  static readonly SEARCH_TURN   = 1.2;
-  static readonly CHASE_TURN    = 2.2;
-  static readonly ATTACK_TURN   = 3.5;
+  static readonly SEARCH_TURN   = 1.5; 
+  static readonly CHASE_TURN    = 2.5; 
+  static readonly ATTACK_TURN   = 1.8; 
 
   detectionRadius: number = 320;
-  attackRadius:    number = 45;
-  captureRadius:   number = 20;
+  attackRadius:    number = 50;
+  captureRadius:   number = 16; 
 
   constructor(x: number, y: number, heading: number = 0) {
     this.x = x;
@@ -51,6 +49,8 @@ export class Shark {
     if (this.state === "COOLDOWN") {
       this.cooldownTimer -= dt;
       this.speed = Shark.COOLDOWN_SPEED * speedMultiplier;
+      this.desiredHeading += prng.range(-0.5, 0.5) * dt;
+      
       if (this.cooldownTimer <= 0) {
         this.state = "SEARCH";
         this.currentTarget = null;
@@ -58,13 +58,12 @@ export class Shark {
     } else if (this.state === "ATTACK") {
       this.attackTimer -= dt;
       this.speed = Shark.ATTACK_SPEED * speedMultiplier;
-      maxTurnRate = Shark.ATTACK_TURN;
+      maxTurnRate = Shark.ATTACK_TURN; 
       if (this.attackTimer <= 0) {
         this.state = "COOLDOWN";
         this.cooldownTimer = 1.25;
       }
     } else {
-      // Detect alive fish in range
       const visible = fishList.filter((f) => {
         if (!f.isAlive) return false;
         const dx = f.x - this.x;
@@ -76,10 +75,8 @@ export class Shark {
         this.state = "SEARCH";
         this.currentTarget = null;
         this.speed = Shark.SEARCH_SPEED * speedMultiplier;
-        // Gentle wander
         this.desiredHeading += prng.range(-0.8, 0.8) * dt;
       } else {
-        // Score: nearest + isolation bonus
         let bestScore = -Infinity;
         let best: Fish | null = null;
         for (const f of visible) {
@@ -106,7 +103,7 @@ export class Shark {
       }
     }
 
-    // Steer toward target (turn-rate-limited — no snapping)
+    // 1. Calculate base desired heading toward target or wander
     if (this.currentTarget?.isAlive && (this.state === "CHASE" || this.state === "ATTACK")) {
       this.desiredHeading = Math.atan2(
         this.currentTarget.y - this.y,
@@ -114,7 +111,23 @@ export class Shark {
       );
     }
 
-    // Global Capture check (shark eats any living fish it touches unless chewing)
+    // ==========================================
+    // 2. VECTOR-BLENDED WALL AVOIDANCE (THE FIX)
+    // ==========================================
+    // Instead of forcing the heading blindly, we blend a wall-repulsion vector 
+    // into our desired heading so the shark smoothly slides along the glass.
+    let steerX = Math.cos(this.desiredHeading);
+    let steerY = Math.sin(this.desiredHeading);
+
+    const margin = 80;
+    if (this.x < margin)                 steerX += (margin - this.x) / margin * 2.5;
+    if (this.x > worldWidth  - margin)   steerX -= (this.x - (worldWidth - margin)) / margin * 2.5;
+    if (this.y < margin)                 steerY += (margin - this.y) / margin * 2.5;
+    if (this.y > worldHeight - margin)   steerY -= (this.y - (worldHeight - margin)) / margin * 2.5;
+
+    this.desiredHeading = Math.atan2(steerY, steerX);
+
+    // Capture check
     if (this.state !== "COOLDOWN") {
       for (const f of fishList) {
         if (!f.isAlive) continue;
@@ -127,7 +140,7 @@ export class Shark {
           if (this.currentTarget?.id === f.id) {
              this.currentTarget = null;
           }
-          break; // Eat one at a time
+          break; 
         }
       }
     }
@@ -139,18 +152,11 @@ export class Shark {
     const maxTurn = maxTurnRate * dt;
     this.heading += Math.max(-maxTurn, Math.min(maxTurn, diff));
 
-    // Boundary repulsion — steer away from edges, never teleport
-    const margin = 60;
-    if (this.x < margin)                 this.heading += 1.5 * dt;
-    if (this.x > worldWidth  - margin)   this.heading -= 1.5 * dt;
-    if (this.y < margin)                 this.heading += 1.5 * dt;
-    if (this.y > worldHeight - margin)   this.heading -= 1.5 * dt;
-
     // Integrate position
     this.x += Math.cos(this.heading) * this.speed * dt;
     this.y += Math.sin(this.heading) * this.speed * dt;
 
-    // Hard clamp as absolute safety net
+    // Hard clamp absolute safety net
     this.x = Math.max(12, Math.min(worldWidth  - 12, this.x));
     this.y = Math.max(12, Math.min(worldHeight - 12, this.y));
 

@@ -82,7 +82,7 @@ export class TrafficSim {
     this.updatePositions();
   }
 
-  update(dtMultiplier: number): void {
+  update(dtMultiplier: number, mainCar?: { distAlongTrack: number, lateralOffset: number }): void {
     this.laneChangeCooldown += dtMultiplier;
 
     if (this.laneChangeCooldown > 4.0) {
@@ -94,8 +94,30 @@ export class TrafficSim {
 
     for (let i = 0; i < this.cars.length; i++) {
       const c = this.cars[i];
-      c.distAlongTrack += c.speed * dtMultiplier;
-      c.distAlongTrack = c.distAlongTrack % this.track.totalLength;
+      
+      // Calculate intended new distance
+      let nextDist = c.distAlongTrack + c.speed * dtMultiplier;
+      
+      // Prevent rear-ending the main car
+      if (mainCar) {
+        // Wrap around distance logic
+        let distDiff = mainCar.distAlongTrack - c.distAlongTrack;
+        if (distDiff < -this.track.totalLength / 2) distDiff += this.track.totalLength;
+        if (distDiff > this.track.totalLength / 2) distDiff -= this.track.totalLength;
+        
+        // If NPC is behind main car (0 to 12 units) and in the same lane (lateral offset within 4 units)
+        if (distDiff > 0 && distDiff < 15) {
+          const lateralDiff = Math.abs(mainCar.lateralOffset - c.currentOffset);
+          if (lateralDiff < 4.0) {
+            // Hard clamp the NPC's distance to stay behind the main car
+            nextDist = Math.min(nextDist, c.distAlongTrack + (distDiff - 6) * dtMultiplier);
+            // Essentially matching speed or braking
+          }
+        }
+      }
+
+      if (nextDist < 0) nextDist += this.track.totalLength;
+      c.distAlongTrack = nextDist % this.track.totalLength;
 
       const targetOffset = (c.targetLane - 1) * this.track.laneWidth;
       c.currentOffset += (targetOffset - c.currentOffset) * Math.min(1.0, 2.0 * dtMultiplier);

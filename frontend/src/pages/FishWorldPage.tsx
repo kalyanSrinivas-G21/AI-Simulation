@@ -18,10 +18,9 @@ export const FishWorldPage: React.FC = () => {
   const [fps, setFps] = useState<number>(60);
   const [speedMultiplier, setSpeedMultiplier] = useState<number>(1.0);
 
-  // Instantiate Fish World with global seed
   const world = useMemo(() => {
     return new FishWorld(980, 580, globalSeed, 220);
-  }, [globalSeed]);
+  }, []); // Only instantiate once, then let useEffect handle seed resets
 
   const [metrics, setMetrics] = useState<FishMetrics>(() => world.getMetrics());
 
@@ -34,6 +33,12 @@ export const FishWorldPage: React.FC = () => {
   useEffect(() => {
     world.setSpeedMultiplier(speedMultiplier);
   }, [world, speedMultiplier]);
+
+  // Handle seed changes from navigation bar
+  useEffect(() => {
+    world.reset(globalSeed, 220);
+    setMetrics(world.getMetrics());
+  }, [globalSeed, world]);
 
   // Metric polling loop (every 100ms for UI smoothness)
   useEffect(() => {
@@ -54,22 +59,22 @@ export const FishWorldPage: React.FC = () => {
     0: "Random Agent",
     1: "Rule-Based",
     2: "Swarm (Boids)",
-    3: "Lateral Line Instinct",
+    3: "Predictive Instincts",
   };
   
   const FISH_SHORT_LABELS: Record<number, string> = {
     0: "Random",
     1: "Rules",
     2: "Swarm",
-    3: "Predictive Instinct",
+    3: "Predictive Instincts",
   };
 
   const activeFish = world.fishList.find((f) => f.isAlive) || world.fishList[0];
   const activeRuleIndex = activeFish ? activeFish.activeRuleIndex : -1;
 
-  // Observation vector and actions for DecisionFlow in Level 3
-  const neuralObs = world.neuralCtrl.lastObservation;
-  const neuralAction = world.neuralCtrl.lastAction;
+  // Observation vector and actions for DecisionFlow (Placeholder for now)
+  const neuralObs = new Array(9).fill(0);
+  const neuralAction = [0, 0];
 
   return (
     <div className="min-h-screen bg-grid-lab py-6 px-6 flex flex-col items-center">

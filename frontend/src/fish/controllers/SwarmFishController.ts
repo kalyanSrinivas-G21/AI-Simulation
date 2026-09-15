@@ -14,17 +14,16 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
   label = "Reactive / Swarm (Boids)";
   level = 2 as const;
   isLearned = false;
-  description = "Emergent collective intelligence through local boid interaction rules and panic-wave evasion without a central coordinator.";
+  description = "Emergent collective intelligence through perfectly balanced local boid rules. Forms organic schools that scatter under threat.";
 
-  perceptionRadius = 80;
-  separationRadius = 30;
-  sharkAvoidanceRadius = 150;
+  perceptionRadius = 90; 
+  separationRadius = 35; 
 
-  // Starting weights per §8.4
-  weightSeparation = 1.5;
-  weightAlignment = 1.0;
-  weightCohesion = 1.0;
-  weightAvoidance = 2.5;
+  weightSeparation = 4.5;
+  weightAlignment = 1.2;
+  weightCohesion = 0.8;
+  weightAvoidance = 6.0;
+  weightBoundary = 3.0;
 
   initialize(): void {}
   reset(): void {}
@@ -41,7 +40,7 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
   }
 
   decide(): { heading: number; speed: number } {
-    return { heading: 0, speed: 50 }; // default
+    return { heading: 0, speed: 50 }; 
   }
 
   applyToFish(
@@ -58,124 +57,124 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
 
     let sepX = 0, sepY = 0;
     let alignX = 0, alignY = 0;
-    let cohX = 0, cohY = 0;
-    let avoidX = 0, avoidY = 0;
-
-    let sepCount = 0;
+    let cohX = 0, cohY = 0; 
+    let centerOfMassX = 0, centerOfMassY = 0;
     let maxNeighborPanic = 0;
+    let sepCount = 0;
 
-    // Local boids calculations
+    // ==========================================
+    // 1. EVALUATE NEIGHBORS (Normalized)
+    // ==========================================
     if (neighbors.length > 0) {
-      let avgPosX = 0, avgPosY = 0;
-      let avgVelX = 0, avgVelY = 0;
-      let totalSafetyWeight = 0;
-
-      for (let i = 0; i < neighbors.length; i++) {
-        const n = neighbors[i];
+      for (const n of neighbors) {
         const dx = fish.x - n.x;
         const dy = fish.y - n.y;
-        const d2 = dx * dx + dy * dy;
-        const d = Math.sqrt(d2);
+        const dist = Math.hypot(dx, dy);
 
-        // Separation: extremely strong anti-overlap force
-        if (d < 45 && d > 1e-3) {
-          sepX += (dx / d2) * 5.0; // High multiplier for strict separation
-          sepY += (dy / d2) * 5.0;
-          sepCount++;
-        }
-
-        // Safest Neighbor Weighting: Neighbors further from the shark have more influence
-        const nDistToShark = Math.hypot(n.x - shark.x, n.y - shark.y);
-        // Map distance to a safety multiplier (e.g. 1.0 for close, 5.0 for far)
-        const safetyWeight = 1.0 + Math.max(0, (nDistToShark - 100) / 100);
-        totalSafetyWeight += safetyWeight;
-
-        // Alignment accumulator (weighted by safety)
-        avgVelX += Math.cos(n.heading) * safetyWeight;
-        avgVelY += Math.sin(n.heading) * safetyWeight;
-
-        // Cohesion accumulator (weighted by safety)
-        avgPosX += n.x * safetyWeight;
-        avgPosY += n.y * safetyWeight;
-
-        if (n.panicLevel > maxNeighborPanic) {
-          maxNeighborPanic = n.panicLevel;
+        if (dist > 0.001) {
+          if (dist < this.separationRadius) {
+            const pushStrength = (this.separationRadius - dist) / this.separationRadius;
+            sepX += (dx / dist) * pushStrength;
+            sepY += (dy / dist) * pushStrength;
+            sepCount++;
+          }
+          alignX += Math.cos(n.heading);
+          alignY += Math.sin(n.heading);
+          centerOfMassX += n.x;
+          centerOfMassY += n.y;
+          if (n.panicLevel > maxNeighborPanic) maxNeighborPanic = n.panicLevel;
         }
       }
 
-      if (sepCount > 0) {
-        sepX /= sepCount;
-        sepY /= sepCount;
-      }
+      // FIX: Normalize Separation to prevent dense-school overpowering
+      let sepMag = Math.hypot(sepX, sepY);
+      if (sepMag > 0) { sepX /= sepMag; sepY /= sepMag; }
 
-      if (totalSafetyWeight > 0) {
-        // Alignment vector
-        alignX = avgVelX / totalSafetyWeight;
-        alignY = avgVelY / totalSafetyWeight;
+      let alignMag = Math.hypot(alignX, alignY);
+      if (alignMag > 0) { alignX /= alignMag; alignY /= alignMag; }
 
-        // Cohesion: average(neighborPos) - myPos
-        cohX = avgPosX / totalSafetyWeight - fish.x;
-        cohY = avgPosY / totalSafetyWeight - fish.y;
-        const cohDist = Math.hypot(cohX, cohY);
-        if (cohDist > 1e-3) {
-          cohX /= cohDist;
-          cohY /= cohDist;
-        }
+      centerOfMassX /= neighbors.length;
+      centerOfMassY /= neighbors.length;
+      cohX = centerOfMassX - fish.x;
+      cohY = centerOfMassY - fish.y;
+      let cohMag = Math.hypot(cohX, cohY);
+      if (cohMag > 0) { cohX /= cohMag; cohY /= cohMag; }
+    }
+
+    // ==========================================
+    // 2. PREDATOR AVOIDANCE & PANIC SPREAD
+    // ==========================================
+    let avoidX = 0, avoidY = 0;
+    let panic = 0;
+    if (obs.distToShark < 160 && obs.distToShark > 0.1) {
+      panic = 1.0 - (obs.distToShark / 160);
+      avoidX = (fish.x - obs.sharkPos.x) / obs.distToShark;
+      avoidY = (fish.y - obs.sharkPos.y) / obs.distToShark;
+      fish.panicLevel = panic; 
+    } else {
+      fish.panicLevel = Math.max(0, fish.panicLevel - 0.05); 
+      if (maxNeighborPanic > 0.2) {
+        fish.panicLevel = Math.max(fish.panicLevel, maxNeighborPanic * 0.85);
+        panic = fish.panicLevel; // carry over slight panic
       }
     }
 
-    // Shark Avoidance: (myPos - sharkPos) / distance² if shark within 150px
-    if (obs.distToShark < this.sharkAvoidanceRadius && obs.distToShark > 1e-3) {
-      const dx = fish.x - obs.sharkPos.x;
-      const dy = fish.y - obs.sharkPos.y;
-      const d2 = obs.distToShark * obs.distToShark;
-      avoidX = (dx / d2) * 50; // scaled for force magnitude
-      avoidY = (dy / d2) * 50;
-
-      // Trigger high panic on direct threat
-      fish.panicLevel = 1.0;
-    } else if (maxNeighborPanic > 0.3) {
-      // Panic wave propagation: neighbor panic spreads outwards!
-      fish.panicLevel = Math.max(fish.panicLevel, maxNeighborPanic * 0.92);
+    // FIX: HARD PRIORITY FLEE. Drop everything and run straight if shark is close.
+    if (obs.distToShark < 100 && obs.distToShark > 0.1) {
+      const fleeAngle = Math.atan2(avoidY, avoidX);
+      fish.steer(fleeAngle, 45 + (panic * 35));
+      return;
     }
 
-    // Boundary repulsion
+    // ==========================================
+    // 3. BOUNDARY AVOIDANCE (Normalized)
+    // ==========================================
     let boundX = 0, boundY = 0;
-    const margin = 50;
-    if (fish.x < margin) boundX += (margin - fish.x) / margin;
-    if (fish.x > worldWidth - margin) boundX -= (fish.x - (worldWidth - margin)) / margin;
-    if (fish.y < margin) boundY += (margin - fish.y) / margin;
-    if (fish.y > worldHeight - margin) boundY -= (fish.y - (worldHeight - margin)) / margin;
+    const margin = 60;
+    if (fish.x < margin) boundX = (margin - fish.x) / margin;
+    if (fish.x > worldWidth - margin) boundX = -(fish.x - (worldWidth - margin)) / margin;
+    if (fish.y < margin) boundY = (margin - fish.y) / margin;
+    if (fish.y > worldHeight - margin) boundY = -(fish.y - (worldHeight - margin)) / margin;
+    
+    let boundMag = Math.hypot(boundX, boundY);
+    if (boundMag > 0) { boundX /= boundMag; boundY /= boundMag; }
 
-    // Current forward vector
-    let targetVx = Math.cos(fish.heading);
-    let targetVy = Math.sin(fish.heading);
+    // ==========================================
+    // 4. VECTOR BLENDING & STEERING
+    // ==========================================
+    let targetVx = Math.cos(fish.heading) * 1.5; // Momentum prevents jitter-braking
+    let targetVy = Math.sin(fish.heading) * 1.5;
 
-    // Sum all steering vectors with weights
-    targetVx += sepX * this.weightSeparation;
-    targetVy += sepY * this.weightSeparation;
+    // FIX: Dynamic flock weights. Flocking turns off as panic rises.
+    let flockWeight = 1.0 - Math.min(1.0, panic * 1.5);
+    
+    targetVx += sepX * this.weightSeparation * flockWeight;
+    targetVy += sepY * this.weightSeparation * flockWeight;
+    targetVx += alignX * this.weightAlignment * flockWeight;
+    targetVy += alignY * this.weightAlignment * flockWeight;
+    targetVx += cohX * this.weightCohesion * flockWeight;
+    targetVy += cohY * this.weightCohesion * flockWeight;
 
-    targetVx += alignX * this.weightAlignment;
-    targetVy += alignY * this.weightAlignment;
+    targetVx += avoidX * this.weightAvoidance * panic;
+    targetVy += avoidY * this.weightAvoidance * panic;
 
-    targetVx += cohX * this.weightCohesion;
-    targetVy += cohY * this.weightCohesion;
+    targetVx += boundX * this.weightBoundary;
+    targetVy += boundY * this.weightBoundary;
 
-    targetVx += avoidX * this.weightAvoidance;
-    targetVy += avoidY * this.weightAvoidance;
-
-    targetVx += boundX * 1.8;
-    targetVy += boundY * 1.8;
-
-    // Desired heading based on sum of forces
     const desiredHeading = Math.atan2(targetVy, targetVx);
 
-    // Dynamic speed based on panic/avoidance
-    let desiredSpeed = 40; // base px/s
-    if (fish.panicLevel > 0.2) {
-      desiredSpeed = 55 + fish.panicLevel * 25; // max 80 px/s
+    let desiredSpeed = 45; 
+    if (panic > 0.1) {
+      desiredSpeed = 45 + (panic * 35); 
     }
 
-    fish.steer(desiredHeading, desiredSpeed);
+    let angleDiff = desiredHeading - fish.heading;
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    
+    const turnLimit = panic > 0.3 ? 0.4 : 0.15; // Increased panic turn limit
+    const finalHeading = fish.heading + Math.max(-turnLimit, Math.min(turnLimit, angleDiff));
+
+    fish.steer(finalHeading, desiredSpeed);
   }
 }

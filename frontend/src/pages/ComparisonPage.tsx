@@ -169,7 +169,9 @@ export const ComparisonPage: React.FC = () => {
                   style={{ backgroundColor: LEVEL_COLORS[leftLevel] }}
                 />
                 <span className="font-heading font-bold text-sm text-textPrimary uppercase">
-                  CONTROLLER A: {LEVEL_LABELS[leftLevel]}
+                  CONTROLLER A: {comparisonDomain === "fish" 
+                    ? ["Random", "Rules", "Learning", "Predictive Instincts"][leftLevel] 
+                    : ["Random", "Rules", "Learning", "Neural Network"][leftLevel]}
                 </span>
               </div>
               <select
@@ -179,7 +181,9 @@ export const ComparisonPage: React.FC = () => {
               >
                 {selectableLevels.map((l) => (
                   <option key={l} value={l}>
-                    Level {l}: {LEVEL_LABELS[l]}
+                    Level {l}: {comparisonDomain === "fish" 
+                      ? ["Random", "Rules", "Learning", "Predictive Instincts"][l] 
+                      : ["Random", "Rules", "Learning", "Neural Network"][l]}
                   </option>
                 ))}
               </select>
@@ -254,7 +258,9 @@ export const ComparisonPage: React.FC = () => {
                   style={{ backgroundColor: LEVEL_COLORS[rightLevel] }}
                 />
                 <span className="font-heading font-bold text-sm text-textPrimary uppercase">
-                  CONTROLLER B: {LEVEL_LABELS[rightLevel]}
+                  CONTROLLER B: {comparisonDomain === "fish" 
+                    ? ["Random", "Rules", "Learning", "Predictive Instincts"][rightLevel] 
+                    : ["Random", "Rules", "Learning", "Neural Network"][rightLevel]}
                 </span>
               </div>
               <select
@@ -264,7 +270,9 @@ export const ComparisonPage: React.FC = () => {
               >
                 {selectableLevels.map((l) => (
                   <option key={l} value={l}>
-                    Level {l}: {LEVEL_LABELS[l]}
+                    Level {l}: {comparisonDomain === "fish" 
+                      ? ["Random", "Rules", "Learning", "Predictive Instincts"][l] 
+                      : ["Random", "Rules", "Learning", "Neural Network"][l]}
                   </option>
                 ))}
               </select>

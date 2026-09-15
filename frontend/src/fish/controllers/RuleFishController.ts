@@ -23,10 +23,10 @@ export interface RuleAction {
 }
 
 export const FISH_RULES = [
-  { id: 0, label: "Flee Shark", condition: "distToShark < 120px", action: "Turn away from shark, max speed" },
+  { id: 0, label: "Flee Shark", condition: "distToShark < 95px (Blind Spot: >45px if behind)", action: "Turn away from shark + panic error. Stalls if near walls." },
   { id: 1, label: "Avoid Walls", condition: "distToBoundary < 60px", action: "Turn towards world center" },
   { id: 2, label: "Keep Distance", condition: "nearestFish < 25px", action: "Separate from nearest fish" },
-  { id: 3, label: "Wander Drift", condition: "Default fallback", action: "Maintain heading + small drift" },
+  { id: 3, label: "Wander Drift", condition: "Default fallback", action: "Maintain heading + high drift" },
 ];
 
 export class RuleFishController implements Controller<RuleObservation, RuleAction> {
@@ -34,7 +34,7 @@ export class RuleFishController implements Controller<RuleObservation, RuleActio
   label = "Rule-Based System";
   level = 1 as const;
   isLearned = false;
-  description = "Fixed deterministic if-then priority rules. Predictable and rigid under changing environments.";
+  description = "Fixed deterministic if-then priority rules. Predictable, rigid, and suffers from blind spots and corner stalling.";
 
   private prng: PRNG = new PRNG(1337);
 
@@ -96,42 +96,69 @@ export class RuleFishController implements Controller<RuleObservation, RuleActio
   }
 
   decide(obs: RuleObservation, fishCurrentHeading: number = 0): RuleAction {
-    // Rule 0: if distanceToShark < 120px: turn directly away from shark, speed = maxSpeed
-    if (obs.distToShark < 120) {
-      const awayFromShark = obs.sharkAngle + Math.PI;
+    // Calculate if shark is in the fish's blind spot (directly behind)
+    let angleDiff = obs.sharkAngle - fishCurrentHeading;
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    
+    const isBehind = Math.abs(angleDiff) > 2.4; // ~137 to 180 degrees is blind spot
+    const blindSpotCutoff = 45; // Can only sense shark behind it if within 45px
+    
+    const sharkVisible = !(isBehind && obs.distToShark > blindSpotCutoff);
+
+    // Rule 0: Flee Shark
+    // NERF: Reduced range from 120 to 95. Added blind spot logic.
+    if (obs.distToShark < 95 && sharkVisible) {
+      // NERF: Add panic error to escape angle (no longer perfectly 180 degrees)
+      const panicError = this.prng.range(-0.4, 0.4);
+      const awayFromShark = obs.sharkAngle + Math.PI + panicError;
+      
+      // NERF: Corner Trapping. If fleeing but near a wall, the rigid system panics and stalls.
+      let fleeSpeed = 75; // Slightly reduced base flee speed from 80 to 75
+      let fleeHeading = awayFromShark;
+      
+      if (obs.distToBoundary < 40) {
+        // Stalls against the wall and turns erratically, making it easy prey
+        fleeSpeed = 30; 
+        fleeHeading += this.prng.range(-1.5, 1.5);
+      }
+
       return {
-        newHeading: awayFromShark,
-        speed: 80, // px/s
+        newHeading: fleeHeading,
+        speed: fleeSpeed,
         ruleIndex: 0,
       };
     }
 
-    // Rule 1: else if distanceToBoundary < 60px: turn toward world center
+    // If shark is in blind spot, Rule 0 fails. Fish falls through to lower priority rules,
+    // meaning it might just wander directly into the shark's mouth.
+
+    // Rule 1: Avoid Walls
     if (obs.distToBoundary < 60) {
-      // heading towards center (from the fish's position)
       const toCenter = Math.atan2(obs.centerY - obs.fishY, obs.centerX - obs.fishX);
       return {
         newHeading: toCenter,
-        speed: 55, // px/s
+        speed: 50, // Reduced from 55
         ruleIndex: 1,
       };
     }
 
-    // Rule 2: else if nearestFishDistance < 25px: turn away from that fish (separation only)
+    // Rule 2: Keep Distance
     if (obs.nearestNeighborDist < 25) {
       const awayFromFish = obs.nearestNeighborAngle + Math.PI;
       return {
         newHeading: awayFromFish,
-        speed: 50, // px/s
+        speed: 45, // Reduced from 50
         ruleIndex: 2,
       };
     }
 
-    // Rule 3: else: continue on current heading with small random drift
-    const drift = this.prng.range(-0.6, 0.6); // increased slightly for dt
+    // Rule 3: Wander Drift
+    // NERF: Increased drift significantly, making it wander erratically into danger
+    const drift = this.prng.range(-1.2, 1.2); 
     return {
       newHeading: fishCurrentHeading + drift,
-      speed: 42, // px/s
+      speed: 35, // Reduced from 42
       ruleIndex: 3,
     };
   }

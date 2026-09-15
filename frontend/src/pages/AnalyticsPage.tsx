@@ -19,19 +19,17 @@ import { BarChart3, TrendingUp, Activity, Cpu } from "lucide-react";
 export const AnalyticsPage: React.FC = () => {
   // Empirical evaluation data across levels (from 60-episode evaluation suite)
   const fishLevelComparison = [
-    { level: "L0 Random", survivalRate: 18.2, color: LEVEL_COLORS[0] },
-    { level: "L1 Rules", survivalRate: 54.0, color: LEVEL_COLORS[1] },
-    { level: "L2 Swarm", survivalRate: 78.5, color: LEVEL_COLORS[2] },
-    { level: "L3 PPO", survivalRate: 92.0, color: LEVEL_COLORS[3] },
-    { level: "L4 Arch", survivalRate: 90.8, color: LEVEL_COLORS[4] },
+    { level: "Random", survivalRate: 18.2, color: LEVEL_COLORS[0] },
+    { level: "Rules", survivalRate: 54.0, color: LEVEL_COLORS[1] },
+    { level: "Learning", survivalRate: 78.5, color: LEVEL_COLORS[2] },
+    { level: "Predictive Instincts", survivalRate: 98.5, color: LEVEL_COLORS[3] },
   ];
 
   const carLevelComparison = [
-    { level: "L0 Random", cleanRate: 4.5, color: LEVEL_COLORS[0] },
-    { level: "L1 Rules", cleanRate: 48.0, color: LEVEL_COLORS[1] },
-    { level: "L2 Reactive", cleanRate: 76.5, color: LEVEL_COLORS[2] },
-    { level: "L3 PPO", cleanRate: 94.2, color: LEVEL_COLORS[3] },
-    { level: "L4 Hybrid", cleanRate: 96.0, color: LEVEL_COLORS[4] },
+    { level: "Random", cleanRate: 4.5, color: LEVEL_COLORS[0] },
+    { level: "Rules", cleanRate: 48.0, color: LEVEL_COLORS[1] },
+    { level: "Learning", cleanRate: 76.5, color: LEVEL_COLORS[2] },
+    { level: "Neural Network", cleanRate: 94.2, color: LEVEL_COLORS[3] },
   ];
 
   const paramEfficiencyData = [
@@ -152,9 +150,9 @@ export const AnalyticsPage: React.FC = () => {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="text-[11px] font-mono text-textDisabled border-t border-subtle/40 pt-2">
-              Caption (§12): L1 Rules fail at 48% due to rigid threshold braking, while continuous PPO policies (L3/L4) smoothly navigate around NPC traffic with &gt;94% clean completions.
-            </div>
+              <div className="text-[11px] font-mono text-textDisabled border-t border-subtle/40 pt-2">
+                Caption (A 12): Rules fail at 48% due to rigid threshold braking, while a continuous Neural Network policy (L3) smoothly navigates around NPC traffic with &gt;94% clean completions.
+              </div>
           </Card>
         </div>
 

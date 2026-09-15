@@ -1,5 +1,4 @@
-import { Controller } from "../../controllers/types";
-import { NeuralLayer } from "../../fish/controllers/NeuralFishController";
+import { Controller, NeuralLayer } from "../../controllers/types";
 
 export class NeuralCarController implements Controller<number[], { steer: number; throttle: number }> {
   id = "car_l3_learning";

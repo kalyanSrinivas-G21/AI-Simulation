@@ -14,3 +14,18 @@ export interface Controller<TObservation, TAction> extends ControllerMeta {
   decide(observation: TObservation): TAction;
   reset(seed?: number): void;
 }
+
+export interface NeuralLayer {
+  weight: number[][]; // [out_features][in_features]
+  bias: number[];
+  activation: "tanh" | "relu" | "swish" | "sigmoid" | "linear"; // Expanded for potential future uses
+}
+
+export interface NeuralModelData {
+  model_name: string;
+  world: string;
+  level: number;
+  input_dim: number;
+  output_dim: number;
+  layers: NeuralLayer[];
+}

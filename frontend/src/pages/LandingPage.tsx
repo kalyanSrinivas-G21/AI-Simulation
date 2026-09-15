@@ -15,7 +15,7 @@ import { motion } from "framer-motion";
 export const LandingPage: React.FC = () => {
   const { setCurrentPage, setFishLevel, setCarLevel } = useAppStore();
 
-  const levels: IntelligenceLevel[] = [0, 1, 2, 3, 4];
+  const levels: IntelligenceLevel[] = [0, 1, 2, 3];
 
   return (
     <div className="min-h-screen bg-grid-lab py-12 px-6 flex flex-col items-center">
@@ -33,7 +33,7 @@ export const LandingPage: React.FC = () => {
 
           <p className="text-base sm:text-lg text-textSecondary font-sans leading-relaxed">
             From random behaviour to rule-based systems, emergent swarm intelligence, reinforcement
-            learning, and vision-assisted perception.
+            learning, and advanced neural networks.
           </p>
 
           <div className="p-4 rounded-card bg-panel/80 border border-subtle text-xs font-mono text-textSecondary max-w-2xl text-left border-l-4 border-l-accent-primary">

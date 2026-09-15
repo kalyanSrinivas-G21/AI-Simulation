@@ -57,8 +57,6 @@ export const DemoModeManager: React.FC = () => {
           return 25000;
         case 3:
           return 30000;
-        case 4:
-          return 30000;
       }
     };
 
