@@ -1,7 +1,7 @@
 import { Controller } from "../../controllers/types";
 
 export interface CarRuleObservation {
-  sensors: number[]; // [front, fLeft, fRight, left, right]
+  sensors: number[];
   speed: number;
   lateralOffset: number;
 }
@@ -12,25 +12,12 @@ export interface CarAction {
   activeRuleIndex: number;
 }
 
-// Exhaustive Rule Base for Expert System Demonstration
 export const CAR_RULES = [
-  { id: 0, label: "PANIC FREEZE", condition: "All sensors < 0.2", action: "Absolute Freeze (throttle -1.0, steer 0)" },
-  
-  { id: 1, label: "EMERGENCY BRAKE", condition: "front < 0.25", action: "ABS Brake (throttle -1.0)" },
-  { id: 2, label: "EVADE LEFT BLOCK", condition: "frontLeft < 0.30", action: "Hard Swerve Right (-0.8), throttle 0.2" },
-  { id: 3, label: "EVADE RIGHT BLOCK", condition: "frontRight < 0.30", action: "Hard Swerve Left (+0.8), throttle 0.2" },
-  
-  { id: 4, label: "ACC BRAKING", condition: "0.25 < front < 0.60", action: "Proportional Brake (throttle = (front-0.2)*1.5)" },
-  
-  { id: 5, label: "ANTICIPATE LEFT CURVE", condition: "frontLeft < frontRight - 0.15", action: "Steer Left Smoothly (+0.35)" },
-  { id: 6, label: "ANTICIPATE RIGHT CURVE", condition: "frontRight < frontLeft - 0.15", action: "Steer Right Smoothly (-0.35)" },
-  
-  { id: 7, label: "AGGRESSIVE CENTERING", condition: "|offset| > 1.5", action: "Steer = -sign(offset) * 0.6" },
-  { id: 8, label: "PROPORTIONAL CENTERING", condition: "|offset| > 0.2", action: "Steer = -offset * 0.35" },
-  { id: 9, label: "WALL BALANCING", condition: "All clear", action: "Steer += (left - right) * 0.15" },
-  
-  { id: 10, label: "CORNERING SPEED LIMIT", condition: "|steer| > 0.5", action: "Reduce throttle to 0.4" },
-  { id: 11, label: "CRUISE ACCELERATION", condition: "front > 0.60", action: "Throttle = 0.8" },
+  { id: 0, label: "PANIC BRAKE", condition: "front < 0.15", action: "Throttle = -1.0" },
+  { id: 1, label: "WALL REPULSION", condition: "left < 0.2 || right < 0.2", action: "Push away from wall" },
+  { id: 2, label: "EVADE OBSTACLE", condition: "front < 0.55", action: "Swerve to open lane & Brake" },
+  { id: 3, label: "NAVIGATE CURVE", condition: "|frontLeft - frontRight| > 0.15", action: "Steer into curve & Slow down" },
+  { id: 4, label: "LANE CENTERING", condition: "Road is clear", action: "Gentle center tracking" },
 ];
 
 export class RuleCarController implements Controller<CarRuleObservation, CarAction> {
@@ -38,86 +25,77 @@ export class RuleCarController implements Controller<CarRuleObservation, CarActi
   label = "Rule-Based Driver";
   level = 1 as const;
   isLearned = false;
-  description = "Exhaustive 12-rule expert system. Covers panic, ACC, curve anticipation, and centering. Still brittle in dense dynamic traffic.";
+  description = "A robust cascading priority system that strictly overrides lower-level rules to guarantee safety.";
 
   initialize(): void {}
   reset(): void {}
-
-  observe(state: { sensors: number[]; speed: number; lateralOffset: number }): CarRuleObservation {
-    return state;
-  }
+  observe(state: { sensors: number[]; speed: number; lateralOffset: number }): CarRuleObservation { return state; }
 
   decide(obs: CarRuleObservation): CarAction {
-    const [front, frontLeft, frontRight, left, right] = obs.sensors;
+    // Sensor mapping: 
+    // [0]: Front, [1]: Front-Right, [2]: Front-Left, [3]: Right, [4]: Left
+    const [front, frontRight, frontLeft, right, left] = obs.sensors;
+    
+    // Geometric difference between diagonals helps us "see" curves
+    const diagDiff = frontLeft - frontRight;
+
+    // Default states (Lowest Priority)
     let steer = 0;
-    let throttle = 0.8; // Default Cruise
-    let activeRuleIndex = 11; // Default to Cruise
+    let throttle = 0.0; 
+    let activeRuleIndex = 4; 
 
-    // RULE 0: PANIC FREEZE (If boxed in completely)
-    if (front < 0.2 && frontLeft < 0.2 && frontRight < 0.2) {
-      return { steer: 0, throttle: -1.0, activeRuleIndex: 0 };
+    // ==========================================
+    // RULE 4: LANE CENTERING (Base Behavior)
+    // ==========================================
+    // If the road is straight, gently guide the car to lateralOffset 0.
+    steer = -obs.lateralOffset * 0.4;
+    throttle = 0.7;
+    activeRuleIndex = 4;
+
+    // ==========================================
+    // RULE 3: NAVIGATE CURVE
+    // ==========================================
+    // Overwrites Rule 4. If the track curves, abandon centering and follow the wall.
+    // If turning right, frontLeft is open (large) and frontRight is blocked (small).
+    // diagDiff becomes positive, steering us Right (+).
+    if (Math.abs(diagDiff) > 0.15) {
+        steer = diagDiff * 0.8; 
+        throttle = 0.45; // Drop speed immediately to maintain grip
+        activeRuleIndex = 3;
     }
 
-    // RULE 1: EMERGENCY BRAKE (Front imminently blocked)
-    if (front < 0.25) {
-      // Steer towards the clearest side while braking
-      const evadeDir = frontLeft > frontRight ? -0.5 : 0.5;
-      return { steer: evadeDir, throttle: -1.0, activeRuleIndex: 1 };
+    // ==========================================
+    // RULE 2: EVADE OBSTACLE
+    // ==========================================
+    // Overwrites Rules 3 & 4. If a car is in front, swerve to whichever side has more room.
+    if (front < 0.55) {
+        steer = frontLeft > frontRight ? -0.7 : 0.7;
+        throttle = (front - 0.15) * 2.0; // Gradual braking as we approach
+        activeRuleIndex = 2;
     }
 
-    // RULE 2 & 3: EVASIVE SWERVING (Obstacle encroaching on front diagonals)
-    if (frontLeft < 0.30) {
-      return { steer: -0.8, throttle: 0.2, activeRuleIndex: 2 };
-    }
-    if (frontRight < 0.30) {
-      return { steer: 0.8, throttle: 0.2, activeRuleIndex: 3 };
-    }
-
-    // RULE 4: ADAPTIVE CRUISE CONTROL (Following traffic)
-    if (front < 0.60) {
-      // Proportional braking based on distance
-      throttle = (front - 0.2) * 1.5; 
-      throttle = Math.max(-0.5, Math.min(1.0, throttle));
-      activeRuleIndex = 4;
-      // Keep centered while braking
-      steer = -obs.lateralOffset * 0.35;
-    } else {
-      // RULES 5-9: STEERING LOGIC (If no immediate collision)
-      
-      // RULE 5 & 6: CURVE ANTICIPATION (Using sensor differentials)
-      if (frontLeft < frontRight - 0.15) {
-        // Track curves left
-        steer = 0.35;
-        activeRuleIndex = 5;
-      } else if (frontRight < frontLeft - 0.15) {
-        // Track curves right
-        steer = -0.35;
-        activeRuleIndex = 6;
-      } else {
-        // RULE 7 & 8: LANE CENTERING
-        if (Math.abs(obs.lateralOffset) > 1.5) {
-          // Aggressive centering if severely off-center
-          steer = -Math.sign(obs.lateralOffset) * 0.6;
-          activeRuleIndex = 7;
-        } else if (Math.abs(obs.lateralOffset) > 0.2) {
-          // Proportional centering for minor drift
-          steer = -obs.lateralOffset * 0.35;
-          activeRuleIndex = 8;
-        } else {
-          // RULE 9: WALL BALANCING (If perfectly centered, stay parallel)
-          steer = (left - right) * 0.15;
-          activeRuleIndex = 9;
-        }
-      }
+    // ==========================================
+    // RULE 1: WALL REPULSION
+    // ==========================================
+    // Overwrites steering from all previous rules if we are about to scrape the wall.
+    if (left < 0.2 || right < 0.2) {
+        if (left < 0.2) steer += (0.2 - left) * 6.0;  // Push Right
+        if (right < 0.2) steer -= (0.2 - right) * 6.0; // Push Left
+        
+        throttle = Math.min(throttle, 0.4); // Ensure we don't accelerate into a wall bounce
+        activeRuleIndex = 1;
     }
 
-    // RULE 10: CORNERING SPEED LIMIT
-    if (Math.abs(steer) > 0.5) {
-      throttle = Math.min(throttle, 0.4); // Slow down for sharp turns
-      if (activeRuleIndex < 10) activeRuleIndex = 10; // Override rule index if slowing down
+    // ==========================================
+    // RULE 0: PANIC BRAKE
+    // ==========================================
+    // Overwrites throttle. If collision is imminent, full stop.
+    if (front < 0.15) {
+        throttle = -1.0;
+        activeRuleIndex = 0;
     }
 
-    // Clamp outputs
+    // Physics Clamps to prevent extreme inputs from breaking the simulation
     steer = Math.max(-1.0, Math.min(1.0, steer));
     throttle = Math.max(-1.0, Math.min(1.0, throttle));
 

@@ -23,23 +23,23 @@ export class RandomCarController implements Controller<null, { steer: number; th
   decide(): { steer: number; throttle: number } {
     this.glitchTimer++;
     
-    // Change behavior randomly every 20-60 frames
+    // 60 frames = 1 second in the new fixed timestep physics
     if (this.glitchTimer > 20 + Math.random() * 40) {
       this.glitchTimer = 0;
       const action = Math.random();
       
-      if (action < 0.2) {
-        // Glitch: Full reverse and hard steer
-        this.currentSteer = Math.random() > 0.5 ? 1.0 : -1.0;
-        this.currentThrottle = -0.8;
-      } else if (action < 0.4) {
+      if (action < 0.15) {
+        // Glitch: Reverse and steer
+        this.currentSteer = Math.random() > 0.5 ? 0.8 : -0.8;
+        this.currentThrottle = -0.5;
+      } else if (action < 0.3) {
         // Freeze
         this.currentSteer = 0;
         this.currentThrottle = 0;
       } else {
-        // Chaotic steering
-        this.currentSteer = Math.random() * 2 - 1;
-        this.currentThrottle = Math.random() * 0.8 + 0.2;
+        // Chaotic steering, but slightly constrained so it doesn't instantly die on the new tighter track
+        this.currentSteer = (Math.random() * 2 - 1) * 0.7;
+        this.currentThrottle = Math.random() * 0.6 + 0.4;
       }
     }
     return { steer: this.currentSteer, throttle: this.currentThrottle };

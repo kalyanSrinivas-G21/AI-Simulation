@@ -5,10 +5,13 @@ export class Car {
   z: number = 0;
   heading: number = 0;
   speed: number = 0.0;
+  
   steering: number = 0;
+  currentSteerInput: number = 0; 
+  currentThrottleInput: number = 0;
 
   minSpeed: number = 0.0;
-  maxSpeed: number = 1.6; // Matched Python environment
+  maxSpeed: number = 1.6; 
   wheelbase: number = 2.6;
 
   isCrashed: boolean = false;
@@ -29,8 +32,10 @@ export class Car {
     this.x = x;
     this.z = z;
     this.heading = heading;
-    this.speed = 0.6; // Python start speed
+    this.speed = 0.6; 
     this.steering = 0;
+    this.currentSteerInput = 0;
+    this.currentThrottleInput = 0;
     this.isCrashed = false;
     this.isOffRoad = false;
     this.ticks = 0;
@@ -43,22 +48,25 @@ export class Car {
   }
 
   updatePhysics(throttle: number, steerInput: number, track: Track, dt: number, speedMultiplier: number): void {
-    if (this.isCrashed) return; // Stop physics if crashed
+    if (this.isCrashed) return; 
 
     this.ticks++;
 
-    // Match Python: instant steering, max 0.45 rad
-    this.steering = Math.max(-1.0, Math.min(1.0, steerInput)) * 0.45;
+    // FIX: Reduced steering snap from 15.0 to 8.0 for a heavier, smoother steering column
+    const steerLerpFactor = 1 - Math.exp(-8.0 * dt * speedMultiplier);
+    this.currentSteerInput += (steerInput - this.currentSteerInput) * steerLerpFactor;
+    this.steering = Math.max(-1.0, Math.min(1.0, this.currentSteerInput)) * 0.45;
 
-    // Match Python physics
-    const accel = throttle * 0.035;
+    const throttleLerpFactor = 1 - Math.exp(-8.0 * dt * speedMultiplier);
+    this.currentThrottleInput += (throttle - this.currentThrottleInput) * throttleLerpFactor;
+
+    const accel = this.currentThrottleInput * 0.035;
     this.speed = Math.max(0.0, Math.min(this.maxSpeed * speedMultiplier, this.speed + accel)) * 0.995;
 
-    // Python heading update (not multiplied by dt)
     const deltaHeading = (this.speed / this.wheelbase) * Math.sin(this.steering);
     this.heading += deltaHeading;
 
-    this.x += Math.cos(this.heading) * this.speed * dt * 60; // scale by dt and 60 to match python step
+    this.x += Math.cos(this.heading) * this.speed * dt * 60; 
     this.z += Math.sin(this.heading) * this.speed * dt * 60;
 
     const stepDist = this.speed * dt * 60;

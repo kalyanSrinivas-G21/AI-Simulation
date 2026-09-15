@@ -12,48 +12,15 @@ interface CarCanvasProps {
   className?: string;
 }
 
-// Helper to generate stadium points for rendering since Track.ts uses pure math now
-const generateStadiumPoints = (track: any) => {
-  const points = [];
-  const halfStraight = track.straightLen / 2;
-  const radius = track.trackRadius;
-
-  // Bottom straight (left to right)
-  for (let i = 0; i <= 20; i++) {
-    const t = i / 20;
-    points.push({ x: -halfStraight + t * track.straightLen, z: -radius });
-  }
-  // Right curve (bottom to top)
-  for (let i = 1; i <= 25; i++) {
-    const t = (i / 25) * Math.PI - Math.PI / 2;
-    points.push({ x: halfStraight + Math.cos(t) * radius, z: Math.sin(t) * radius });
-  }
-  // Top straight (right to left)
-  for (let i = 1; i <= 20; i++) {
-    const t = i / 20;
-    points.push({ x: halfStraight - t * track.straightLen, z: radius });
-  }
-  // Left curve (top to bottom)
-  for (let i = 1; i <= 25; i++) {
-    const t = (i / 25) * Math.PI + Math.PI / 2;
-    points.push({ x: -halfStraight + Math.cos(t) * radius, z: Math.sin(t) * radius });
-  }
-  
-  return points.map((p, i, arr) => {
-    const next = arr[(i + 1) % arr.length];
-    const dx = next.x - p.x;
-    const dz = next.z - p.z;
-    const len = Math.hypot(dx, dz) || 1;
-    return { ...p, normalX: -dz / len, normalZ: dx / len };
-  });
-};
-
 // 3D Track Component
 const TrackMesh: React.FC<{ sim: CarSim }> = ({ sim }) => {
   const track = sim.track;
 
   const { roadGeometry, outerLine, innerLine } = useMemo(() => {
-    const waypoints = generateStadiumPoints(track);
+    // FIX: Pull directly from the high-res physics track!
+    // This perfectly aligns the glowing borders with the crash boundaries
+    // and adds support for viewing the generated Organic Tracks.
+    const waypoints = track.waypoints; 
     const numWp = waypoints.length;
     const halfWidth = track.trackWidth * 0.5;
 
@@ -82,18 +49,15 @@ const TrackMesh: React.FC<{ sim: CarSim }> = ({ sim }) => {
 
   return (
     <group>
-      {/* Ground plane (Lab Grid) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
         <planeGeometry args={[400, 400]} />
         <meshStandardMaterial color="#05080C" roughness={0.95} metalness={0.1} />
       </mesh>
 
-      {/* Road asphalt */}
       <mesh geometry={roadGeometry}>
         <meshStandardMaterial color="#11161D" roughness={0.7} metalness={0.2} />
       </mesh>
 
-      {/* Glowing Neon Barriers */}
       <lineLoop frustumCulled={false}>
         <bufferGeometry attach="geometry" {...new THREE.BufferGeometry().setFromPoints(outerLine)} />
         <lineBasicMaterial color="#3E8EED" opacity={0.8} transparent linewidth={2} />
@@ -106,37 +70,42 @@ const TrackMesh: React.FC<{ sim: CarSim }> = ({ sim }) => {
   );
 };
 
-// 3D Vehicle representation
 const EgoCarMesh: React.FC<{ sim: CarSim; showSensorRays?: boolean }> = ({ sim, showSensorRays = true }) => {
   const groupRef = useRef<THREE.Group>(null);
+  const targetPos = useRef(new THREE.Vector3());
 
-  useFrame(() => {
+  useFrame((state, delta) => {
     if (!groupRef.current) return;
     const car = sim.car;
-    groupRef.current.position.set(car.x, 0.5, car.z);
-    groupRef.current.rotation.y = -car.heading;
+    
+    // SMOOTHING: Gliding Interpolation instead of snapping
+    targetPos.current.set(car.x, 0.5, car.z);
+    groupRef.current.position.lerp(targetPos.current, 1 - Math.exp(-20.0 * delta));
+    
+    // SMOOTHING: Shortest-path angle rotation 
+    const targetRot = -car.heading;
+    let diff = targetRot - groupRef.current.rotation.y;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    groupRef.current.rotation.y += diff * (1 - Math.exp(-20.0 * delta));
   });
 
   const levelColor = LEVEL_COLORS[sim.level] || "#3E8EED";
 
   return (
     <group ref={groupRef}>
-      {/* Glowing Underglow */}
       <pointLight position={[0, 0.2, 0]} distance={12} intensity={2} color={levelColor} />
       
-      {/* Car Body */}
       <mesh position={[0, 0.4, 0]} castShadow>
         <boxGeometry args={[3.2, 0.7, 1.6]} />
         <meshStandardMaterial color={levelColor} roughness={0.2} metalness={0.8} emissive={levelColor} emissiveIntensity={0.2} />
       </mesh>
 
-      {/* Cabin */}
       <mesh position={[-0.2, 0.85, 0]}>
         <boxGeometry args={[1.8, 0.55, 1.3]} />
         <meshStandardMaterial color="#0B121B" roughness={0.1} metalness={0.9} transparent opacity={0.8} />
       </mesh>
 
-      {/* Wheels */}
       {[-1.0, 1.0].map((x, xi) =>
         [-0.85, 0.85].map((z, zi) => (
           <mesh key={`${xi}-${zi}`} position={[x, 0.15, z]} rotation={[Math.PI / 2, 0, 0]}>
@@ -146,14 +115,13 @@ const EgoCarMesh: React.FC<{ sim: CarSim; showSensorRays?: boolean }> = ({ sim, 
         ))
       )}
 
-      {/* Sensor Rays */}
       {showSensorRays && (
         <group position={[1.6, 0.2, 0]}>
           {SENSOR_CONFIGS.map((cfg, i) => {
             const reading = sim.currentSensors[i] ?? 1.0;
             const currentRange = cfg.maxRange * reading;
             const endX = Math.cos(cfg.angleOffsetRad) * currentRange;
-            const endZ = -Math.sin(cfg.angleOffsetRad) * currentRange;
+            const endZ = Math.sin(cfg.angleOffsetRad) * currentRange;
 
             let rayColor = "#22C55E";
             if (reading < 0.35) rayColor = "#EF4444";
@@ -172,24 +140,45 @@ const EgoCarMesh: React.FC<{ sim: CarSim; showSensorRays?: boolean }> = ({ sim, 
   );
 };
 
-// Traffic Vehicles
+// Independent component for single traffic car to handle its own smooth lerping
+const SingleTrafficCar: React.FC<{ carData: any }> = ({ carData }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const targetPos = useRef(new THREE.Vector3());
+
+  useFrame((state, delta) => {
+    if (!groupRef.current) return;
+    
+    // SMOOTHING: Gliding Interpolation for traffic
+    targetPos.current.set(carData.x, 0.5, carData.z);
+    groupRef.current.position.lerp(targetPos.current, 1 - Math.exp(-20.0 * delta));
+    
+    const targetRot = -carData.heading;
+    let diff = targetRot - groupRef.current.rotation.y;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    groupRef.current.rotation.y += diff * (1 - Math.exp(-20.0 * delta));
+  });
+
+  return (
+    <group ref={groupRef}>
+      <mesh position={[0, 0.35, 0]}>
+        <boxGeometry args={[3.0, 0.65, 1.5]} />
+        <meshStandardMaterial color={carData.color} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+};
+
 const TrafficMeshList: React.FC<{ sim: CarSim }> = ({ sim }) => {
-  const cars = sim.traffic.cars;
   return (
     <group>
-      {cars.map((c) => (
-        <group key={c.id} position={[c.x, 0.5, c.z]} rotation={[0, -c.heading, 0]}>
-          <mesh position={[0, 0.35, 0]}>
-            <boxGeometry args={[3.0, 0.65, 1.5]} />
-            <meshStandardMaterial color={c.color} roughness={0.4} />
-          </mesh>
-        </group>
+      {sim.traffic.cars.map((c) => (
+        <SingleTrafficCar key={c.id} carData={c} />
       ))}
     </group>
   );
 };
 
-// Scene camera
 const SceneRig: React.FC<{ sim: CarSim; cameraMode: "topDown" | "follow" }> = ({ sim, cameraMode }) => {
   const lookTargetRef = useRef(new THREE.Vector3());
 
@@ -216,7 +205,6 @@ const SceneRig: React.FC<{ sim: CarSim; cameraMode: "topDown" | "follow" }> = ({
       lookTargetRef.current.lerp(desiredLook, 1 - Math.exp(-8.0 * delta));
       camera.lookAt(lookTargetRef.current);
     } else {
-      // Dynamic Isometric Top-Down
       const desiredCamPos = new THREE.Vector3(car.x - 40, 70, car.z - 40);
       camera.position.lerp(desiredCamPos, 1 - Math.exp(-2.0 * delta));
       camera.lookAt(car.x, 0, car.z);

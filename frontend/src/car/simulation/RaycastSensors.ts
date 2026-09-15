@@ -16,6 +16,9 @@ export const SENSOR_CONFIGS: RaySensorConfig[] = [
 export interface Obstacle {
   x: number;
   z: number;
+  heading: number;
+  width: number;
+  length: number;
   radius: number;
 }
 
@@ -31,14 +34,14 @@ export class RaycastSensors {
 
     for (let i = 0; i < SENSOR_CONFIGS.length; i++) {
       const { angleOffsetRad, maxRange } = SENSOR_CONFIGS[i];
-      const rayAngle = carHeading + angleOffsetRad;
+      const rayAngle = carHeading + angleOffsetRad; 
       const rayDirX = Math.cos(rayAngle);
       const rayDirZ = Math.sin(rayAngle);
 
       let closestDistance = maxRange;
 
-      // 1. Raymarch against track boundaries
-      const numSteps = 20;
+      // FIX CAUSE 4: Increased steps from 20 to 100 for hyper-accurate 0.4 unit precision
+      const numSteps = 100;
       const stepSize = maxRange / numSteps;
 
       for (let s = 1; s <= numSteps; s++) {
@@ -51,22 +54,54 @@ export class RaycastSensors {
         }
       }
 
-      // 2. Ray-circle intersection against dynamic obstacles (NPC cars)
       for (let o = 0; o < obstacles.length; o++) {
         const obs = obstacles[o];
-        const toObsX = obs.x - carX;
-        const toObsZ = obs.z - carZ;
+        const dx = obs.x - carX;
+        const dz = obs.z - carZ;
+        const distSq = dx * dx + dz * dz;
+        if (distSq > (maxRange + obs.radius) * (maxRange + obs.radius)) continue;
 
-        const proj = toObsX * rayDirX + toObsZ * rayDirZ;
-        if (proj > 0 && proj < closestDistance) {
-          const perpDistSq = toObsX * toObsX + toObsZ * toObsZ - proj * proj;
-          if (perpDistSq < obs.radius * obs.radius) {
-            const halfChord = Math.sqrt(Math.max(0, obs.radius * obs.radius - perpDistSq));
-            const hitDist = proj - halfChord;
-            if (hitDist > 0 && hitDist < closestDistance) {
-              closestDistance = hitDist;
-            }
-          }
+        const cosH = Math.cos(-obs.heading);
+        const sinH = Math.sin(-obs.heading);
+
+        const localOriginX = dx * cosH - dz * sinH;
+        const localOriginZ = dx * sinH + dz * cosH;
+
+        const localDirX = rayDirX * cosH - rayDirZ * sinH;
+        const localDirZ = rayDirX * sinH + rayDirZ * cosH;
+
+        const halfWidth = obs.width / 2;
+        const halfLength = obs.length / 2;
+
+        let tMin = 0;
+        let tMax = maxRange;
+
+        if (Math.abs(localDirX) < 0.0001) {
+            if (-localOriginX < -halfWidth || -localOriginX > halfWidth) continue;
+        } else {
+            const ood = 1.0 / localDirX;
+            let t1 = (-halfWidth - -localOriginX) * ood;
+            let t2 = (halfWidth - -localOriginX) * ood;
+            if (t1 > t2) { const temp = t1; t1 = t2; t2 = temp; }
+            tMin = Math.max(tMin, t1);
+            tMax = Math.min(tMax, t2);
+            if (tMin > tMax) continue;
+        }
+
+        if (Math.abs(localDirZ) < 0.0001) {
+            if (-localOriginZ < -halfLength || -localOriginZ > halfLength) continue;
+        } else {
+            const ood = 1.0 / localDirZ;
+            let t1 = (-halfLength - -localOriginZ) * ood;
+            let t2 = (halfLength - -localOriginZ) * ood;
+            if (t1 > t2) { const temp = t1; t1 = t2; t2 = temp; }
+            tMin = Math.max(tMin, t1);
+            tMax = Math.min(tMax, t2);
+            if (tMin > tMax) continue;
+        }
+
+        if (tMin > 0 && tMin < closestDistance) {
+            closestDistance = tMin;
         }
       }
 

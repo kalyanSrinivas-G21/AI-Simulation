@@ -7,6 +7,7 @@ import { IntelligenceLevel } from "../../design-system/tokens";
 import { RandomCarController } from "../controllers/RandomCarController";
 import { RuleCarController } from "../controllers/RuleCarController";
 import { NeuralCarController } from "../controllers/NeuralCarController";
+import { PerfectCarController } from "../controllers/PerfectCarController";
 
 export interface CarMetrics {
   distanceTravelled: number;
@@ -34,7 +35,8 @@ export class CarSim {
 
   randomCtrl: RandomCarController;
   ruleCtrl: RuleCarController;
-  neuralCtrl: NeuralCarController;
+  neuralCtrl: NeuralCarController; 
+  perfectCtrl: PerfectCarController; 
 
   currentSensors: number[] = [1, 1, 1, 1, 1];
   avoidanceSuccessCount: number = 0;
@@ -47,14 +49,17 @@ export class CarSim {
   bestDistance: number = 0;
   bestWeights: any = null;
 
+  // PHYSICS STABILITY UPGRADE
+  private physicsAccumulator: number = 0;
+  private readonly FIXED_DT: number = 1 / 60; // Locked 60Hz Physics Step
+
   constructor(seed: number = 42) {
     this.seed = seed;
     this.prng = new PRNG(seed);
     
-    // DYNAMIC ENVIRONMENT: Wide random ranges for obvious changes
-    const straightLen = 30 + this.prng.range(0, 100); // 30 to 130
-    const trackRadius = 20 + this.prng.range(0, 50); // 20 to 70
-    this.numCars = 2 + Math.floor(this.prng.range(0, 10)); // 2 to 11 cars
+    const straightLen = 30 + this.prng.range(0, 100); 
+    const trackRadius = 20 + this.prng.range(0, 50); 
+    this.numCars = 2 + Math.floor(this.prng.range(0, 10)); 
     
     this.track = new Track(straightLen, trackRadius);
     this.car = new Car(0, 0, 0);
@@ -63,7 +68,7 @@ export class CarSim {
     this.randomCtrl = new RandomCarController();
     this.ruleCtrl = new RuleCarController();
     this.neuralCtrl = new NeuralCarController();
-    this.neuralCtrl.loadFromUrl();
+    this.perfectCtrl = new PerfectCarController();
 
     this.reset(seed);
   }
@@ -102,46 +107,50 @@ export class CarSim {
     this.car.reset(startX, startZ, startHeading);
     this.traffic.reset(seed, this.numCars);
 
-    // FORCE RANDOMIZATION OF TRAFFIC SPEEDS AND POSITIONS
-    // This bypasses any stubborn logic in TrafficSim.ts
     for (let car of this.traffic.cars) {
-      // 1. Randomize speed (30.0 to 50.0 units) to match the simulation timescale
       car.speed = 30.0 + this.prng.range(0, 20.0);
-      
-      // 2. Randomize position around the track, guaranteeing a safe zone around the player
-      // Player starts at x=0 on the bottom straight (dist = straightLen / 2)
       const playerDist = this.track.straightLen / 2;
-      
-      // Pick a distance at least 60 units ahead of the player, and up to totalLength - 100
-      // This ensures at least 60 units clear ahead and 40 units clear behind.
       let randDist = playerDist + 60.0 + this.prng.range(0, this.track.totalLength - 100.0);
       randDist = randDist % this.track.totalLength;
-      
       car.distAlongTrack = randDist;
       
-      // Randomize lane (0, 1, 2)
       const randomLane = this.prng.rangeInt(0, 2);
       car.lane = randomLane;
       car.targetLane = randomLane;
       car.currentOffset = (randomLane - 1) * this.track.laneWidth;
     }
-    this.traffic.update(0); // Force immediate position update based on new distances
+    this.traffic.update(0); 
 
-    this.randomCtrl.reset(seed);
+    this.randomCtrl.reset();
     this.ruleCtrl.reset();
-    this.neuralCtrl.reset();
+    this.perfectCtrl.reset();
 
     this.avoidanceSuccessCount = 0;
     this.nearMissCount = 0;
     this.elapsedMs = 0;
     this.ticks = 0;
     this.stuckTicks = 0;
+    this.physicsAccumulator = 0;
   }
 
+  // ACCUMULATOR LOOP: Ensures physics always run at a reliable speed
   tick(dtMs: number): CarMetrics {
-    const dt = Math.min(dtMs / 1000, 0.05);
-    this.ticks++;
+    // Cap maximum frame gap to prevent "death spirals" if tab is minimized
+    const dt = Math.min(dtMs / 1000, 0.1); 
     this.elapsedMs += dtMs;
+    this.physicsAccumulator += dt;
+
+    while (this.physicsAccumulator >= this.FIXED_DT) {
+        this.stepPhysics(this.FIXED_DT);
+        this.physicsAccumulator -= this.FIXED_DT;
+    }
+
+    return this.getMetrics();
+  }
+
+  // The actual physics logic, moved into the fixed step loop
+  private stepPhysics(dt: number) {
+    this.ticks++;
     
     if (this.car.speed < 0.1) {
       this.stuckTicks++;
@@ -169,7 +178,6 @@ export class CarSim {
     for (let i = 0; i < obstacles.length; i++) {
       const obs = obstacles[i];
       const dist = Math.hypot(obs.x - this.car.x, obs.z - this.car.z);
-      // Tightened collision radius for rectangular cars (prevents invisible forcefield side collisions)
       if (dist < 2.4) {
         if (!this.car.isCrashed) this.car.registerCrash(this.elapsedMs);
       }
@@ -179,16 +187,16 @@ export class CarSim {
       if (this.car.distanceTravelled > this.bestDistance) {
         this.bestDistance = this.car.distanceTravelled;
         this.bestWeights = this.neuralCtrl.getWeights();
-        this.neuralCtrl.mutate(0.05); // Small exploration from new best
+        this.neuralCtrl.mutate(0.05); 
       } else {
         if (this.bestWeights) {
-          this.neuralCtrl.setWeights(this.bestWeights); // Revert to best weights
+          this.neuralCtrl.setWeights(this.bestWeights); 
         }
-        this.neuralCtrl.mutate(0.15); // Larger mutation to find a new path
+        this.neuralCtrl.mutate(0.15); 
       }
       this.generation++;
       this.reset(this.seed);
-      return this.getMetrics();
+      return;
     }
 
     const { lateralOffset } = this.track.getClosestCenterline(this.car.x, this.car.z);
@@ -203,15 +211,17 @@ export class CarSim {
       const action = this.ruleCtrl.decide(obs);
       steer = action.steer; throttle = action.throttle;
       this.car.activeRuleIndex = action.activeRuleIndex;
-    } else {
+    } else if (this.level === 2) {
       const obs = this.neuralCtrl.observe({ sensors: this.currentSensors, speed: this.car.speed, lateralOffset });
       const action = this.neuralCtrl.decide(obs);
+      steer = action.steer; throttle = action.throttle;
+    } else {
+      const obs = this.perfectCtrl.observe({ sensors: this.currentSensors, speed: this.car.speed, lateralOffset });
+      const action = this.perfectCtrl.decide(obs);
       steer = action.steer; throttle = action.throttle;
     }
 
     this.car.updatePhysics(throttle, steer, this.track, dt, this.speedMultiplier);
-
-    return this.getMetrics();
   }
 
   getMetrics(): CarMetrics {

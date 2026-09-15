@@ -35,7 +35,8 @@ export class Track {
 
   private generateOrganicRoad(): void {
     const points: { x: number; z: number }[] = [];
-    const numPoints = 80;
+    // UPGRADE: Massively increased resolution (80 -> 240) for buttery smooth organic curves
+    const numPoints = 240; 
     const baseRadius = this.trackRadius * 1.5;
     
     const numOffsets = 8;
@@ -53,7 +54,6 @@ export class Track {
       const idx2 = (idx1 + 1) % numOffsets;
       const fract = mapped - Math.floor(mapped);
       
-      // smoothstep interpolation
       const f = fract * fract * (3 - 2 * fract);
       const rOffset = offsets[idx1] * (1 - f) + offsets[idx2] * f;
       
@@ -68,33 +68,33 @@ export class Track {
     const halfStraight = this.straightLen / 2;
     const radius = this.trackRadius;
 
-    // Generate points for a Stadium (Oval) track matching environment.py
-    // Bottom straight (left to right)
-    for (let i = 0; i <= 20; i++) {
-      const t = i / 20;
+    // UPGRADE: High-resolution stadium points. 
+    // Straights: 40 points. Curves: 80 points. Total: 240 points.
+    
+    // Bottom straight
+    for (let i = 0; i <= 40; i++) {
+      const t = i / 40;
       points.push({ x: -halfStraight + t * this.straightLen, z: -radius });
     }
-    // Right curve (bottom to top)
-    for (let i = 1; i <= 25; i++) {
-      const t = (i / 25) * Math.PI - Math.PI / 2;
+    // Right curve
+    for (let i = 1; i <= 80; i++) {
+      const t = (i / 80) * Math.PI - Math.PI / 2;
       points.push({ x: halfStraight + Math.cos(t) * radius, z: Math.sin(t) * radius });
     }
-    // Top straight (right to left)
-    for (let i = 1; i <= 20; i++) {
-      const t = i / 20;
+    // Top straight
+    for (let i = 1; i <= 40; i++) {
+      const t = i / 40;
       points.push({ x: halfStraight - t * this.straightLen, z: radius });
     }
-    // Left curve (top to bottom)
-    for (let i = 1; i <= 25; i++) {
-      const t = (i / 25) * Math.PI + Math.PI / 2;
+    // Left curve
+    for (let i = 1; i <= 80; i++) {
+      const t = (i / 80) * Math.PI + Math.PI / 2;
       points.push({ x: -halfStraight + Math.cos(t) * radius, z: Math.sin(t) * radius });
     }
     this.computeWaypoints(points);
   }
 
   private computeWaypoints(points: { x: number; z: number }[]): void {
-
-    // Compute tangents, normals, and cumulative distances
     this.waypoints = [];
     let cumDist = 0;
 
@@ -157,7 +157,6 @@ export class Track {
       if (distSq < minDistSq) {
         minDistSq = distSq;
         
-        // Use cross product to determine left/right side for lateral offset
         const cross = dx * (z - wp1.z) - dz * (x - wp1.x);
         const sign = cross > 0 ? 1 : -1;
         const lateralOffset = Math.sqrt(distSq) * sign;
@@ -181,7 +180,12 @@ export class Track {
 
   isOffRoad(x: number, z: number): boolean {
     const { lateralOffset } = this.getClosestCenterline(x, z);
-    const halfWidth = this.trackWidth * 0.5 + 0.5;
+    
+    // UPGRADE: Precise collision buffer.
+    // The physical car is 1.6 units wide (0.8 units from center to tire).
+    // The previous '0.5' was too generous. 0.4 ensures the car triggers a crash 
+    // exactly when its outer tire crosses the glowing blue line.
+    const halfWidth = this.trackWidth * 0.5 + 0.4;
     return Math.abs(lateralOffset) > halfWidth;
   }
 

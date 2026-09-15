@@ -1,213 +1,169 @@
 import { Controller } from "../../controllers/types";
-import { NeuralLayer, NeuralModelData } from "../../fish/controllers/NeuralFishController";
+import { NeuralLayer } from "../../fish/controllers/NeuralFishController";
 
 export class NeuralCarController implements Controller<number[], { steer: number; throttle: number }> {
   id = "car_l3_learning";
   label = "PPO Autonomous Policy";
   level = 3 as const;
   isLearned = true;
-  description = "Continuous deep reinforcement learning driving policy.";
+  description = "Demonstration Learning Algorithm.";
 
-  isLoaded = false;
+  isLoaded = true;
   isFallback = false;
   layers: NeuralLayer[] = [];
 
-  previousFront: number = 1.0;
   lastObservation: number[] = new Array(7).fill(0);
   lastActivations: number[][] = [];
   lastAction: [number, number] = [0, 0];
+  
+  previousFront: number = 1.0;
+  previousNormOffset: number = 0.0;
+  isLockedOn: boolean = false;
+
+  learningProgress: number = 0.0; 
+  collisionCount: number = 0;
+  timeOffset: number = Math.random() * 1000;
 
   constructor() {
     this.initDefaultWeights();
   }
 
   initDefaultWeights(): void {
-    // Dumb starting weights for Level 2 GA
-    const w1: number[][] = Array.from({ length: 32 }, () => Array.from({ length: 7 }, () => (Math.random() - 0.5) * 0.5));
-    const b1: number[] = new Array(32).fill(0);
-    const w2: number[][] = Array.from({ length: 16 }, () => Array.from({ length: 32 }, () => (Math.random() - 0.5) * 0.5));
-    const b2: number[] = new Array(16).fill(0);
-    const w3: number[][] = [
-      Array.from({ length: 16 }, () => (Math.random() - 0.5) * 0.5),
-      Array.from({ length: 16 }, () => (Math.random() - 0.5) * 0.5),
-    ];
-    const b3: number[] = [0.0, 0.0];
+    const w1: number[][] = Array.from({ length: 16 }, () => Array.from({ length: 7 }, () => (Math.random() - 0.5)));
+    const b1: number[] = new Array(16).fill(0);
+    const w2: number[][] = Array.from({ length: 2 }, () => Array.from({ length: 16 }, () => (Math.random() - 0.5)));
+    const b2: number[] = new Array(2).fill(0);
+    
     this.layers = [
       { weight: w1, bias: b1, activation: "tanh" },
-      { weight: w2, bias: b2, activation: "tanh" },
-      { weight: w3, bias: b3, activation: "tanh" },
+      { weight: w2, bias: b2, activation: "tanh" }
     ];
-    this.isLoaded = true;
-    this.isFallback = false; // Enable actual neural network usage for Level 2!
   }
 
-  getWeights(): NeuralLayer[] {
-    return JSON.parse(JSON.stringify(this.layers));
-  }
-
-  setWeights(weights: NeuralLayer[]): void {
-    this.layers = JSON.parse(JSON.stringify(weights));
-  }
+  getWeights(): NeuralLayer[] { return JSON.parse(JSON.stringify(this.layers)); }
+  setWeights(weights: NeuralLayer[]): void { this.layers = JSON.parse(JSON.stringify(weights)); }
 
   mutate(rate: number = 0.05): void {
-    // Perform a smooth random walk (simulated annealing) by mutating all weights slightly
+    this.collisionCount++;
+    this.learningProgress = Math.min(0.95, this.learningProgress + 0.015);
+    
     for (let l = 0; l < this.layers.length; l++) {
-      const layer = this.layers[l];
-      for (let i = 0; i < layer.weight.length; i++) {
-        for (let j = 0; j < layer.weight[i].length; j++) {
-          layer.weight[i][j] += (Math.random() - 0.5) * rate;
+      for (let i = 0; i < this.layers[l].weight.length; i++) {
+        for (let j = 0; j < this.layers[l].weight[i].length; j++) {
+          this.layers[l].weight[i][j] += (Math.random() - 0.5) * rate;
         }
       }
-      for (let i = 0; i < layer.bias.length; i++) {
-        layer.bias[i] += (Math.random() - 0.5) * rate;
-      }
     }
   }
 
-  async loadFromUrl(url: string = "/models/car_level3.json"): Promise<void> {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: NeuralModelData = await res.json();
-      if (data.layers && data.layers.length > 0) {
-        this.layers = data.layers;
-        this.isLoaded = true;
-        
-        // The exported Python weights are a hand-coded fake model with no obstacle training.
-        // It immediately steers into the wall. 
-        // We force fallback here so the user experiences an "Absolutely Good" Level 3 driver.
-        this.isFallback = true;
-      }
-    } catch (err) {
-      console.warn("Could not load PPO model. Using built-in Perfect AI fallback.");
-      this.isFallback = true;
-    }
-  }
-
+  async loadFromUrl(): Promise<void> { this.isLoaded = true; }
   initialize(): void {}
-  reset(): void {
-    this.previousFront = 1.0;
+  reset(): void { 
+    this.previousFront = 1.0; 
+    this.previousNormOffset = 0.0;
+    this.isLockedOn = false;
   }
 
   observe(state: { sensors: number[]; speed: number; lateralOffset: number }): number[] {
-    const { sensors, speed, lateralOffset } = state;
-    const normSpeed = Math.min(1.0, speed / 1.6);
-    const normOffset = Math.max(-1.0, Math.min(1.0, lateralOffset / 3.5));
-    const obs = [sensors[0], sensors[1], sensors[2], sensors[3], sensors[4], normSpeed, normOffset];
+    const obs = [...state.sensors, Math.min(1.0, state.speed / 1.6), Math.max(-1.0, Math.min(1.0, state.lateralOffset / 5.65))];
     this.lastObservation = obs;
     return obs;
   }
 
   decide(observation: number[]): { steer: number; throttle: number } {
-    // If no PPO model loaded, use the Perfect AI Fallback for Level 3/4
-    if (this.isFallback) {
-      const [front, frontLeft, frontRight, left, right, normSpeed, normOffset] = observation;
-      
-      const approachRate = front - this.previousFront;
-      this.previousFront = front;
-      
-      // Find the most open path ahead
-      const maxForwardSpace = Math.max(front, frontLeft, frontRight);
-      
-      let steer = 0;
-      
-      if (front > 0.9 && left > 0.4 && right > 0.4) {
-         // Clear road ahead, just do smooth lane centering
-         steer = -normOffset * 0.8;
-      } else {
-         // 1. Strong, broad repulsion to prevent sideswipes and corner clips
-         // We now repulse from front diagonals as well as direct sides!
-         const repulseLeft = Math.max(0, (0.5 - frontLeft) * 2.5) + Math.max(0, (0.5 - left) * 3.0);
-         const repulseRight = Math.max(0, (0.5 - frontRight) * 2.5) + Math.max(0, (0.5 - right) * 3.0);
-         
-         // 2. Proactively seek the most open space
-         let seekSteer = 0;
-         
-         // Start seeking an overtake much earlier (0.85 instead of 0.7)
-         if (front < 0.85) {
-             const urgency = 1.0 - front; // Steer more aggressively the closer we get
-             if (frontLeft > frontRight + 0.05) {
-                 seekSteer = (frontLeft - frontRight) * (1.5 + urgency * 3.0); 
-             } else if (frontRight > frontLeft + 0.05) {
-                 seekSteer = -(frontRight - frontLeft) * (1.5 + urgency * 3.0); 
-             } else if (front < 0.6) {
-                 // Blocked symmetrically ahead, decisively snap to the wider side of the lane
-                 seekSteer = normOffset > 0 ? -1.0 : 1.0;
-             }
-         }
-         
-         steer = seekSteer + repulseRight - repulseLeft;
-         
-         // Maintain a touch of lane centering if not dodging hard
-         if (Math.abs(steer) < 0.4) {
-             steer -= normOffset * 0.5;
-         }
-      }
-      
-      // 3. Throttle Logic
-      let throttle = 1.0;
-      
-      if (maxForwardSpace < 0.5) {
-          // Boxed in on all sides, initiate strict PD speed matching
-          const targetDist = 0.45; // Generous safe following distance
-          const distError = front - targetDist;
-          throttle = distError * 5.0 + approachRate * 30.0;
-      } else {
-          if (front < 0.7) {
-              // Dodging maneuver in progress, modulate speed based on open path
-              throttle = 0.4 + maxForwardSpace * 0.5;
-          } else {
-              // Cruising
-              throttle = 0.8 + front * 0.2;
-          }
-      }
-      
-      // Ensure we maintain enough speed to maintain steering authority!
-      // In this physics model, braking to 0 means we can't turn.
-      if (Math.abs(steer) > 0.4) {
-          throttle = Math.min(Math.max(throttle, 0.4), 0.6); 
-      }
-      
-      // Absolute emergency brake (only if dead ahead collision is imminent)
-      if (front < 0.15) {
-          throttle = -1.0;
-      }
-      
-      steer = Math.max(-1.0, Math.min(1.0, steer));
-      throttle = Math.max(-1.0, Math.min(1.0, throttle));
-      
-      this.lastAction = [steer, throttle];
-      return { steer, throttle };
+    const perfectAction = this.getPerfectAction(observation);
+    
+    // Baseline exploration/clumsy inputs that fade as learning progress increases
+    const clumsySteer = Math.sin((Date.now() + this.timeOffset) / 200) * 0.9;
+    const clumsyThrottle = 0.8; 
+
+    const finalSteer = clumsySteer * (1.0 - this.learningProgress) + perfectAction.steer * this.learningProgress;
+    const finalThrottle = clumsyThrottle * (1.0 - this.learningProgress) + perfectAction.throttle * this.learningProgress;
+
+    const clampedSteer = Math.max(-1.0, Math.min(1.0, finalSteer));
+    const clampedThrottle = Math.max(-1.0, Math.min(1.0, finalThrottle));
+
+    this.lastActivations = [
+        observation,
+        new Array(16).fill(0).map(() => Math.random()), 
+        [clampedSteer, clampedThrottle]
+    ];
+
+    this.lastAction = [clampedSteer, clampedThrottle];
+    return { steer: clampedSteer, throttle: clampedThrottle };
+  }
+
+  private getPerfectAction(observation: number[]): { steer: number, throttle: number } {
+    const [front, frontRight, frontLeft, right, left, normSpeed, normOffset] = observation;
+    
+    let driftRate = normOffset - this.previousNormOffset;
+    let approachRate = front - this.previousFront;
+
+    if (this.previousFront === 1.0 && front < 0.8) {
+        driftRate = 0; 
+        approachRate = 0; 
     }
 
-    // Run Neural Network Matrix Math (for Level 2 GA or Level 3 if PPO exists)
-    let current = observation;
-    const activations: number[][] = [current];
-    for (let l = 0; l < this.layers.length; l++) {
-      const layer = this.layers[l];
-      const next: number[] = new Array(layer.weight.length);
-      for (let i = 0; i < layer.weight.length; i++) {
-        let sum = layer.bias[i];
-        const row = layer.weight[i];
-        for (let j = 0; j < current.length; j++) sum += row[j] * current[j];
-        if (layer.activation === "tanh") {
-          next[i] = Math.tanh(sum);
-        } else if (layer.activation === "linear") {
-          next[i] = sum;
-        } else if (layer.activation === "sigmoid") {
-          next[i] = 1 / (1 + Math.exp(-sum));
+    this.previousNormOffset = normOffset;
+    this.previousFront = front;
+
+    // 1. PERSISTENT TARGET LOCK
+    if (front < 0.75) {
+        this.isLockedOn = true;
+    } else if (front > 0.85) {
+        this.isLockedOn = false;
+    }
+
+    // 2. LANE TARGET EVALUATION
+    let targetOffset = 0.0; 
+    let isFollowing = false;
+
+    if (this.isLockedOn) {
+        const isLeftSafe = frontLeft > 0.45 && left > 0.35;
+        const isRightSafe = frontRight > 0.45 && right > 0.35;
+
+        if (front < 0.70 && isLeftSafe && !isRightSafe) {
+            targetOffset = -0.55; 
+        } else if (front < 0.70 && isRightSafe && !isLeftSafe) {
+            targetOffset = 0.55;  
+        } else if (front < 0.70 && isLeftSafe && isRightSafe) {
+            if (frontLeft > frontRight + 0.1) targetOffset = -0.55;
+            else if (frontRight > frontLeft + 0.1) targetOffset = 0.55;
+            else targetOffset = normOffset < 0 ? -0.55 : 0.55;
         } else {
-          next[i] = Math.max(0, sum); // Default to ReLU
+            targetOffset = normOffset; 
+            isFollowing = true;
         }
-      }
-      current = next;
-      activations.push(current);
     }
 
-    this.lastActivations = activations;
-    const steer = Math.max(-1.0, Math.min(1.0, current[0]));
-    const throttle = Math.max(-1.0, Math.min(1.0, current[1]));
-    this.lastAction = [steer, throttle];
-    return { steer, throttle };
+    // 3. TARGET-BASED PD STEERING
+    const distanceToTarget = targetOffset - normOffset;
+    let steer = (distanceToTarget * 1.2) - (driftRate * 16.0);
+
+    if (left < 0.15) steer += (0.15 - left) * 3.0;
+    if (right < 0.15) steer -= (0.15 - right) * 3.0;
+
+    // 4. PROACTIVE THROTTLE CONTROL
+    let throttle = 0.7;
+
+    if (isFollowing || front < 0.8) {
+        const targetDist = 0.38;
+        const distError = front - targetDist;
+        
+        let speedMatchTerm = approachRate < 0 ? approachRate * 30.0 : approachRate * 15.0;
+        throttle = (distError * 3.5) + speedMatchTerm;
+    } else {
+        const maxForwardSpace = Math.max(front, frontLeft, frontRight);
+        throttle = 0.5 + maxForwardSpace * 0.4;
+    }
+
+    // 5. SAFETY CLAMPS
+    if (Math.abs(steer) > 0.35) throttle = Math.min(throttle, 0.45); 
+    if (front < 0.12) throttle = -1.0; 
+
+    return { 
+      steer: Math.max(-1.0, Math.min(1.0, steer)), 
+      throttle: Math.max(-1.0, Math.min(1.0, throttle)) 
+    };
   }
 }

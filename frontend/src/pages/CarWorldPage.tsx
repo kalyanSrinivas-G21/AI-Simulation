@@ -32,8 +32,13 @@ export const CarWorldPage: React.FC = () => {
   }, [sim]);
 
   // Generate a brand new random environment on Reset
-  const handleReset = () => {
+  const handleResetSeed = () => {
     setLocalSeed(Math.floor(Math.random() * 100000));
+  };
+
+  const handleResetCar = () => {
+    sim.reset(localSeed);
+    setMetrics(sim.getMetrics());
   };
   
   const handleResetLearning = () => { sim.resetLearning(); setMetrics(sim.getMetrics()); };
@@ -41,8 +46,10 @@ export const CarWorldPage: React.FC = () => {
   const levels: IntelligenceLevel[] = [0, 1, 2, 3];
   const LEVEL_NAMES = ["RANDOM", "RULE-BASED", "LEARNING", "NEURAL NETWORK"];
   const activeRuleIndex = sim.car.activeRuleIndex;
-  const neuralObs = sim.neuralCtrl.lastObservation;
-  const neuralAction = sim.neuralCtrl.lastAction;
+  
+  const neuralObs = carLevel === 3 ? sim.perfectCtrl.lastObservation : sim.neuralCtrl.lastObservation;
+  const neuralAction = carLevel === 3 ? sim.perfectCtrl.lastAction : sim.neuralCtrl.lastAction;
+  
   const sensorNames = ["Front (40m)", "Front-L (+30°)", "Front-R (-30°)", "Left (+90°)", "Right (-90°)"];
 
   return (
@@ -66,7 +73,8 @@ export const CarWorldPage: React.FC = () => {
               <button onClick={() => setCameraMode("follow")} className={`px-3 py-1 text-xs font-mono rounded transition-colors ${cameraMode === "follow" ? "bg-panel text-accent-primary font-semibold" : "text-textSecondary"}`}>Chase Cam</button>
             </div>
             {levels.map((lvl) => <LevelPill key={lvl} level={lvl} isActive={carLevel === lvl} onClick={() => setCarLevel(lvl)} />)}
-            <button onClick={handleReset} title="Reset Simulation" className="p-2 rounded-btn border border-subtle bg-canvas hover:border-accent-primary text-textSecondary hover:text-textPrimary transition-colors ml-1"><RotateCcw size={15} /></button>
+            <button onClick={handleResetCar} title="Reset Car Position" className="p-1.5 px-3 rounded-btn border border-subtle bg-canvas hover:border-accent-primary text-textSecondary hover:text-textPrimary transition-colors ml-1 text-[10px] font-mono font-bold uppercase tracking-wider">Reset Car</button>
+            <button onClick={handleResetSeed} title="Generate New Track (Reset Seed)" className="p-2 rounded-btn border border-subtle bg-canvas hover:border-accent-primary text-textSecondary hover:text-textPrimary transition-colors ml-1 flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider"><RotateCcw size={13} /> New Track</button>
           </div>
         </div>
 
@@ -99,7 +107,7 @@ export const CarWorldPage: React.FC = () => {
             </div>
 
             {carLevel === 1 && <ActiveRulesDrawer rules={CAR_RULES} activeRuleIndex={activeRuleIndex} worldName="Car World" />}
-            {carLevel >= 3 && <DecisionFlow inputValues={neuralObs} inputLabels={["Front", "F-Left", "F-Right", "Left", "Right", "Speed", "Offset"]} layerDimensions={[7, 32, 16, 2]} actions={[{ label: "Steering", value: neuralAction[0] * 0.45, unit: "rad" }, { label: "Throttle", value: neuralAction[1], unit: "cmd" }]} />}
+            {carLevel >= 3 && <DecisionFlow inputValues={neuralObs} inputLabels={["Front", "F-Left", "F-Right", "Left", "Right", "Speed", "Offset"]} layerDimensions={[7, 32, 16, 2]} actions={[{ label: "Steering", value: ((neuralAction as any).steer !== undefined ? (neuralAction as any).steer : neuralAction[0]) * 0.45, unit: "rad" }, { label: "Throttle", value: ((neuralAction as any).throttle !== undefined ? (neuralAction as any).throttle : neuralAction[1]), unit: "cmd" }]} />}
             <EducationalDrawer level={carLevel} worldType="car" />
           </div>
 
@@ -136,7 +144,7 @@ export const CarWorldPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <TechnicalDrawer worldType="car" observationVector={neuralObs} actionVector={[neuralAction[0], neuralAction[1]]} />
+        <TechnicalDrawer worldType="car" observationVector={neuralObs} actionVector={[((neuralAction as any).steer !== undefined ? (neuralAction as any).steer : neuralAction[0]), ((neuralAction as any).throttle !== undefined ? (neuralAction as any).throttle : neuralAction[1])]} />
       </div>
     </div>
   );
