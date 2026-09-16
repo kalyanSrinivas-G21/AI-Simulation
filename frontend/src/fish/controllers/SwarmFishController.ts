@@ -19,9 +19,10 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
   perceptionRadius = 90; 
   separationRadius = 35; 
 
-  weightSeparation = 4.5;
-  weightAlignment = 1.2;
-  weightCohesion = 0.8;
+  // FIX: Tuned weights for tight, organic grouping without vector explosion.
+  weightSeparation = 1.8;
+  weightAlignment = 1.0;
+  weightCohesion = 1.0;
   weightAvoidance = 6.0;
   weightBoundary = 3.0;
 
@@ -40,7 +41,7 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
   }
 
   decide(): { heading: number; speed: number } {
-    return { heading: 0, speed: 50 }; 
+    return { heading: 0, speed: 40 }; 
   }
 
   applyToFish(
@@ -60,10 +61,9 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
     let cohX = 0, cohY = 0; 
     let centerOfMassX = 0, centerOfMassY = 0;
     let maxNeighborPanic = 0;
-    let sepCount = 0;
 
     // ==========================================
-    // 1. EVALUATE NEIGHBORS (Normalized)
+    // 1. EVALUATE NEIGHBORS
     // ==========================================
     if (neighbors.length > 0) {
       for (const n of neighbors) {
@@ -76,7 +76,6 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
             const pushStrength = (this.separationRadius - dist) / this.separationRadius;
             sepX += (dx / dist) * pushStrength;
             sepY += (dy / dist) * pushStrength;
-            sepCount++;
           }
           alignX += Math.cos(n.heading);
           alignY += Math.sin(n.heading);
@@ -86,10 +85,15 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
         }
       }
 
-      // FIX: Normalize Separation to prevent dense-school overpowering
+      // FIX: Cap Separation magnitude at 1.5 to prevent dense-school velocity explosion,
+      // but DO NOT normalize it to 1.0. This allows density to push harder, creating tight packs.
       let sepMag = Math.hypot(sepX, sepY);
-      if (sepMag > 0) { sepX /= sepMag; sepY /= sepMag; }
+      if (sepMag > 1.5) {
+        sepX = (sepX / sepMag) * 1.5;
+        sepY = (sepY / sepMag) * 1.5;
+      }
 
+      // Normalize Alignment and Cohesion
       let alignMag = Math.hypot(alignX, alignY);
       if (alignMag > 0) { alignX /= alignMag; alignY /= alignMag; }
 
@@ -115,11 +119,11 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
       fish.panicLevel = Math.max(0, fish.panicLevel - 0.05); 
       if (maxNeighborPanic > 0.2) {
         fish.panicLevel = Math.max(fish.panicLevel, maxNeighborPanic * 0.85);
-        panic = fish.panicLevel; // carry over slight panic
+        panic = fish.panicLevel;
       }
     }
 
-    // FIX: HARD PRIORITY FLEE. Drop everything and run straight if shark is close.
+    // HARD PRIORITY FLEE. Drop everything and run straight if shark is close.
     if (obs.distToShark < 100 && obs.distToShark > 0.1) {
       const fleeAngle = Math.atan2(avoidY, avoidX);
       fish.steer(fleeAngle, 45 + (panic * 35));
@@ -142,10 +146,10 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
     // ==========================================
     // 4. VECTOR BLENDING & STEERING
     // ==========================================
-    let targetVx = Math.cos(fish.heading) * 1.5; // Momentum prevents jitter-braking
-    let targetVy = Math.sin(fish.heading) * 1.5;
+    // FIX: Reduced momentum from 1.5 to 0.5 so Boid rules actually steer the fish.
+    let targetVx = Math.cos(fish.heading) * 0.5;
+    let targetVy = Math.sin(fish.heading) * 0.5;
 
-    // FIX: Dynamic flock weights. Flocking turns off as panic rises.
     let flockWeight = 1.0 - Math.min(1.0, panic * 1.5);
     
     targetVx += sepX * this.weightSeparation * flockWeight;
@@ -163,7 +167,8 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
 
     const desiredHeading = Math.atan2(targetVy, targetVx);
 
-    let desiredSpeed = 45; 
+    // FIX: Reduced safe speed from 45 to 38 so they glide and group tightly.
+    let desiredSpeed = 38; 
     if (panic > 0.1) {
       desiredSpeed = 45 + (panic * 35); 
     }
@@ -172,7 +177,8 @@ export class SwarmFishController implements Controller<SwarmObservation, { headi
     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
     
-    const turnLimit = panic > 0.3 ? 0.4 : 0.15; // Increased panic turn limit
+    // FIX: Increased safe turn limit from 0.15 to 0.25 so they can curve into groups.
+    const turnLimit = panic > 0.3 ? 0.4 : 0.25; 
     const finalHeading = fish.heading + Math.max(-turnLimit, Math.min(turnLimit, angleDiff));
 
     fish.steer(finalHeading, desiredSpeed);
